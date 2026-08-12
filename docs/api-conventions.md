@@ -53,8 +53,12 @@ Codes in use today:
 | `COMMISSIONER_MUST_TRANSFER_FIRST` | 409 | Sole commissioner tried to leave with other active members present |
 | `SOLE_MEMBER_USE_DELETE` | 409 | Sole commissioner (and only member) tried to leave — delete the league instead |
 | `CANNOT_REMOVE_SELF` | 400 | Commissioner targeted their own membership via remove-member — use leave/transfer/delete |
+| `PICK_LOCKED` | 409 | The game has already started (JAC-31-36) — the single most important rejection code in the app; see `docs/picks-and-locking.md` |
+| `GAME_CANCELED` | 409 | The game was canceled; no picks are ever accepted against it |
+| `GAME_POSTPONED` | 409 | The game was postponed; picks reopen once schedule-ingest finds a real new time |
+| `INVALID_TEAM_SELECTION` | 400 | `selectedTeam` isn't one of the game's two teams (or `'DRAW'` when the game doesn't allow it) |
 
-Offensive league-name rejection reuses `VALIDATION_ERROR` (`fields: [{ field: "name", ... }]`) rather than a bespoke code — same pattern as timezone validation in `users.routes.ts`/`auth.routes.ts`.
+Offensive league-name rejection reuses `VALIDATION_ERROR` (`fields: [{ field: "name", ... }]`) rather than a bespoke code — same pattern as timezone validation in `users.routes.ts`/`auth.routes.ts`. A pick write against a nonexistent game, or a game whose sport isn't part of the league, also reuses `VALIDATION_ERROR` for the same reason — a malformed/invalid reference, not a distinct business rule the client needs to branch on differently. `PICK_LOCKED`/`GAME_CANCELED`/`GAME_POSTPONED`/`INVALID_TEAM_SELECTION` each get their own code because they *are* — see `apps/api/src/lib/pick-write.ts`'s `rejectionToApiError`.
 
 ## Authentication
 
@@ -94,6 +98,8 @@ Response:
 `GET /leagues/:leagueId/picks` (JAC-17) doesn't follow this yet — it returns a bare array. That route exists only to give the authorization layer something real to test over HTTP (see `apps/api/src/routes/leagues.routes.ts`), not as the real picks-list endpoint; the real one, whenever the leagues/picks epic builds it, should follow this convention.
 
 `GET /leagues/:leagueId/members` (JAC-25-30) is this convention's first real consumer. One implementation note worth flagging for the next paginated endpoint: the opaque cursor here encodes `(joinedAt, id)`, and the `WHERE` comparison against it needs `date_trunc('milliseconds', ...)` on **both** the cursor column and the `ORDER BY` — node-postgres's `timestamptz` parser produces a JS `Date` (millisecond resolution), but the column itself is stored with microsecond precision, so comparing the raw column against a millisecond-truncated cursor value lets a boundary row's real sub-millisecond remainder satisfy `>` against its own cursor and reappear on the next page. Caught by an integration test asserting the second page returns exactly the expected remainder, not one more.
+
+`GET /leagues/:leagueId/audit-log` (JAC-31-36) is the second consumer, over `(createdAt, id)` — same `date_trunc('milliseconds', ...)` fix applied on both sides again, kept as its own small cursor-helper pair rather than generalizing the members-list one, so a two-call-site abstraction didn't risk touching already-verified pagination behavior.
 
 ## Timestamps
 

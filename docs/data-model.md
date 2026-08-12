@@ -1,4 +1,4 @@
-# Data model (JAC-8, extended by JAC-13–18, JAC-19–24, JAC-25–30)
+# Data model (JAC-8, extended by JAC-13–18, JAC-19–24, JAC-25–30, JAC-31–36)
 
 Source of truth: [`apps/api/src/db/schema.ts`](../apps/api/src/db/schema.ts) (Drizzle) and the migrations in [`apps/api/src/db/migrations/`](../apps/api/src/db/migrations/) (hand-written; see note below on why).
 
@@ -101,6 +101,15 @@ result                   -- SEPARATE from game; corrections are UPDATEs
   revision_count          -- auto-incremented by trigger when winning_team changes
   created_at / updated_at
 
+pick_audit_log            -- APPEND-ONLY (JAC-31-36); never updated or deleted by application
+                           -- code, backstopped by DB triggers that unconditionally reject both
+  id (uuid, pk)
+  league_member_id -> league_member.id
+  game_id          -> game.id
+  selected_team    -- the value written by THIS specific write, not the current value
+  action           ('create' | 'change')
+  created_at       -- server time of the write; the record of "when," not just "what"
+
 job_run                  -- cross-run memory for stateless cron-triggered jobs (JAC-24)
   id (uuid, pk)
   job_name                -- 'schedule-ingest' | 'score-poll'
@@ -134,6 +143,8 @@ job_run                  -- cross-run memory for stateless cron-triggered jobs (
 12. **`league.commissioner_id` stays the single source of truth for the commissioner invariant; `league_member.role` is a trigger-synced denormalized column, backstopped by a deferrable EXCLUDE constraint (JAC-25-30)** — confirmed the design during planning, not something the literal spec asked for at this level of detail. See `docs/leagues-and-membership.md` for the full reasoning, including why a plain unique index couldn't do this job.
 13. **`league_invite_code` is one row per league, not a history table (JAC-25-30)** — "rotatable" is satisfied by overwriting `code` and resetting `uses_count` in place. If a future need arises to audit past codes (e.g., "who joined via which code"), that's a separate `league_invite_code_redemption` table — not built now since nothing asks for that history yet.
 14. **No ban/block-rejoin list (JAC-25-30)** — a member removed by the commissioner can rejoin via the invite code exactly like anyone else; removal stops participation *now*, it isn't a ban. A real moderation/ban feature isn't in the literal spec; `league_member_report` gives the commissioner visibility without building one.
+15. **`pick_audit_log` is a genuinely separate table from `pick`, not a history/versioning extension bolted onto `pick` itself (JAC-31-36)** — `pick` still holds exactly one row per (member, game), the member's CURRENT selection, exactly as originally specified; `pick_audit_log` is an independent, append-only stream of every write attempt that succeeded, including the ones later overwritten by a change. This is the literal ask ("append-only log... never mutated or deleted"), and keeping it structurally separate from `pick` means `pick`'s own semantics (one current selection, upsertable) never had to change to accommodate it.
+16. **`pick_audit_log` immutability is enforced by `BEFORE UPDATE`/`BEFORE DELETE` triggers, not a `REVOKE` on the app's DB role** — this app connects as a single table-owning role (no separate least-privilege application role exists anywhere in this codebase), and a table's owner bypasses ordinary `GRANT`/`REVOKE` privilege checks in Postgres. Making `REVOKE` actually bite would need a second, non-owner DB role — real new infrastructure, not a migration-only change — so the trigger approach (already used for `check_pick_selected_team` and the commissioner invariant) was the right fit, not a compromise.
 
 ## Migration tooling note
 

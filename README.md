@@ -2,7 +2,7 @@
 
 Daily straight-up picks against the spread of nothing — just who wins. Friends compare records inside leagues.
 
-This repo covers foundations (repo, data model, CI, environments, observability, API conventions), authentication & identity (signup/login/sessions, email verification and password reset, profile management, the authorization layer, self-serve deletion), the sports data pipeline (schedule ingest, score polling, edge-case handling, failure alerting), and leagues & membership (create/join/leave, invite codes, commissioner controls, the multi-league home screen). Full picks/standings UX is still ahead.
+This repo covers foundations (repo, data model, CI, environments, observability, API conventions), authentication & identity (signup/login/sessions, email verification and password reset, profile management, the authorization layer, self-serve deletion), the sports data pipeline (schedule ingest, score polling, edge-case handling, failure alerting), leagues & membership (create/join/leave, invite codes, commissioner controls, the multi-league home screen), and picks & lock enforcement (the daily slate, single/batch pick writes, server-enforced locking at game start, pick privacy, an append-only audit trail).
 
 ## Stack
 
@@ -73,6 +73,10 @@ Schedule ingest and score polling against the real ESPN API, canonical status/te
 ## Leagues & membership
 
 Creating a league, invite codes (generation, rotation, rate-limited redemption), join/leave/rejoin, commissioner controls (transfer, remove a member, delete the league, the sports-selection freeze), and the multi-league home screen's record/rank/unpicked-games computation are documented in [`docs/leagues-and-membership.md`](docs/leagues-and-membership.md).
+
+## Picks & lock enforcement
+
+The daily slate (day boundaries in the league's timezone), single and batch pick writes, why lock enforcement is safe against a rescheduled game and a manipulated client clock alike, per-game independence in the batch endpoint, server-side pick privacy, and the append-only pick audit trail are documented in [`docs/picks-and-locking.md`](docs/picks-and-locking.md).
 
 ## Branching & contributing
 
