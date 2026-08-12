@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isValidIanaTimeZone, parseIsoUtc, toUtcIso, toZonedDisplay } from "./time.js";
+import { dayBoundsUtc, isValidIanaTimeZone, parseIsoUtc, toUtcIso, toZonedDisplay } from "./time.js";
 
 describe("time helpers", () => {
   it("round-trips an ISO UTC timestamp", () => {
@@ -21,5 +21,32 @@ describe("time helpers", () => {
   it("validates IANA time zone names", () => {
     expect(isValidIanaTimeZone("America/Chicago")).toBe(true);
     expect(isValidIanaTimeZone("Not/AZone")).toBe(false);
+  });
+
+  describe("dayBoundsUtc", () => {
+    it("computes UTC day bounds for a timezone behind UTC (America/Chicago, CST)", () => {
+      // 2026-01-15 00:00 America/Chicago (CST, UTC-6) is 2026-01-15T06:00:00Z.
+      const { start, end } = dayBoundsUtc("2026-01-15", "America/Chicago");
+      expect(start.toISOString()).toBe("2026-01-15T06:00:00.000Z");
+      expect(end.toISOString()).toBe("2026-01-16T06:00:00.000Z");
+    });
+
+    it("computes UTC day bounds for a timezone ahead of UTC (Asia/Tokyo)", () => {
+      // 2026-01-15 00:00 Asia/Tokyo (UTC+9) is 2026-01-14T15:00:00Z.
+      const { start, end } = dayBoundsUtc("2026-01-15", "Asia/Tokyo");
+      expect(start.toISOString()).toBe("2026-01-14T15:00:00.000Z");
+      expect(end.toISOString()).toBe("2026-01-15T15:00:00.000Z");
+    });
+
+    it("a UTC-adjacent instant just before the boundary belongs to the PREVIOUS day", () => {
+      const { start } = dayBoundsUtc("2026-01-15", "America/Chicago");
+      const oneMsBefore = new Date(start.getTime() - 1);
+      // 2026-01-15T05:59:59.999Z is still 2026-01-14 in America/Chicago.
+      expect(oneMsBefore.toISOString()).toBe("2026-01-15T05:59:59.999Z");
+    });
+
+    it("throws for an invalid timezone", () => {
+      expect(() => dayBoundsUtc("2026-01-15", "Not/AZone")).toThrow(/Invalid date/);
+    });
   });
 });

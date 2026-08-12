@@ -12,7 +12,8 @@ import { generateInviteCode, isUniqueConstraintViolation } from "../lib/invite-c
 import { requireLeagueCommissioner, requireLeagueMembership, requireOwnMembership } from "../lib/authorization.js";
 import { rejectionToApiError, writePick } from "../lib/pick-write.js";
 import { ESPN_SPORT_SLUGS } from "../lib/sports-provider.js";
-import { isValidIanaTimeZone, nowUtc } from "../lib/time.js";
+import { dayBoundsUtc, isValidIanaTimeZone, nowUtc } from "../lib/time.js";
+import { DateTime } from "luxon";
 
 const MEMBERS_PAGE_DEFAULT_LIMIT = 25;
 const MEMBERS_PAGE_MAX_LIMIT = 100;
@@ -462,6 +463,130 @@ export async function leaguesRoutes(app: FastifyInstance): Promise<void> {
       });
 
       return { results };
+    },
+  );
+
+  /**
+   * The slate for one calendar day, computed in the LEAGUE's timezone
+   * (JAC-31) — day boundaries via dayBoundsUtc, never UTC and never the
+   * viewer's device. One query for the whole day (no N+1 per game).
+   *
+   * Privacy (JAC-35), enforced entirely in the query itself, never by
+   * fetching everyone's picks and filtering in application code (which
+   * would leak through the network tab): `hasPicked` is always visible
+   * for every other member, but `selectedTeam` for anyone other than
+   * the caller is only populated by the SQL itself once `locked` is
+   * true. The caller's own selection (`myPick`) is always visible
+   * regardless of lock state — it's their own data.
+   *
+   * `locked` is computed in SQL (`now() >= starts_at`), never in the
+   * app and never from a client-supplied value, with the SAME boundary
+   * the write-path enforces (writePick's gate is `starts_at > now()` to
+   * accept) — display and enforcement can never disagree at the
+   * margin. This is a READ; the actual accept/reject decision always
+   * happens again, independently, at write time — this endpoint never
+   * substitutes for that.
+   */
+  app.get(
+    "/:leagueId/slate",
+    {
+      schema: {
+        params: { type: "object", required: ["leagueId"], properties: { leagueId: { type: "string" } } },
+        querystring: { type: "object", properties: { date: { type: "string", format: "date" } } },
+      },
+    },
+    async (request) => {
+      const { leagueId } = request.params as { leagueId: string };
+      const { date } = request.query as { date?: string };
+      const member = await requireLeagueMembership(request.user!.id, leagueId);
+
+      const [leagueRow] = await db
+        .select({ sports: league.sports, timezone: league.timezone })
+        .from(league)
+        .where(eq(league.id, leagueId))
+        .limit(1);
+
+      const resolvedDate = date ?? DateTime.now().setZone(leagueRow!.timezone).toISODate()!;
+      const { start, end } = dayBoundsUtc(resolvedDate, leagueRow!.timezone);
+
+      const sportsSql = sql.join(
+        leagueRow!.sports.map((s) => sql`${s}`),
+        sql`, `,
+      );
+
+      const slateResult = await db.execute<{
+        game_id: string;
+        sport: string;
+        home_team: string;
+        away_team: string;
+        starts_at: Date;
+        status: string;
+        allows_draw: boolean;
+        winning_team: string | null;
+        locked: boolean;
+        my_pick: string | null;
+        other_picks: Array<{ leagueMemberId: string; displayName: string; hasPicked: boolean; selectedTeam: string | null }>;
+      }>(sql`
+        select
+          g.id as game_id, g.sport, g.home_team, g.away_team, g.starts_at, g.status, g.allows_draw,
+          r.winning_team,
+          (now() >= g.starts_at) as locked,
+          max(case when lm.id = ${member.id} then p.selected_team end) as my_pick,
+          coalesce(
+            json_agg(json_build_object(
+              'leagueMemberId', lm.id,
+              'displayName', u.display_name,
+              'hasPicked', (p.id is not null),
+              'selectedTeam', case when now() >= g.starts_at and p.id is not null then p.selected_team else null end
+            )) filter (where lm.id != ${member.id}),
+            '[]'
+          ) as other_picks
+        from game g
+        left join result r on r.game_id = g.id
+        cross join league_member lm
+        join "user" u on u.id = lm.user_id
+        left join pick p on p.game_id = g.id and p.league_member_id = lm.id
+        where g.sport in (${sportsSql})
+          and g.starts_at >= ${start} and g.starts_at < ${end}
+          and lm.league_id = ${leagueId} and lm.left_at is null
+        group by g.id, g.sport, g.home_team, g.away_team, g.starts_at, g.status, g.allows_draw, r.winning_team
+        order by g.starts_at
+      `);
+
+      const games = slateResult.rows.map((row) => {
+        const pickState =
+          row.winning_team !== null
+            ? row.my_pick !== null && row.my_pick === row.winning_team
+              ? "final_hit"
+              : "final_miss"
+            : row.locked
+              ? "locked"
+              : row.my_pick !== null
+                ? "picked_open"
+                : "unpicked";
+
+        return {
+          gameId: row.game_id,
+          sport: row.sport,
+          homeTeam: row.home_team,
+          awayTeam: row.away_team,
+          startsAt: row.starts_at,
+          status: row.status,
+          allowsDraw: row.allows_draw,
+          winningTeam: row.winning_team,
+          locked: row.locked,
+          myPick: row.my_pick,
+          otherPicks: row.other_picks,
+          pickState,
+        };
+      });
+
+      return {
+        date: resolvedDate,
+        games,
+        pickedCount: games.filter((g) => g.myPick !== null).length,
+        totalCount: games.length,
+      };
     },
   );
 

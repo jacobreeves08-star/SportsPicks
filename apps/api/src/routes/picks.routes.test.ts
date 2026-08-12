@@ -2,11 +2,12 @@ import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { buildApp } from "../app.js";
 import { db } from "../db/client.js";
-import { game as gameTable, pick, pickAuditLog } from "../db/schema.js";
+import { game as gameTable, pick, pickAuditLog, result } from "../db/schema.js";
 import {
   createTestGame,
   createTestLeague,
   createTestLeagueMember,
+  createTestPick,
   createTestUser,
   truncateAllTables,
 } from "../db/test-helpers.js";
@@ -164,5 +165,215 @@ describe("POST /leagues/:leagueId/members/:memberId/picks/batch", () => {
     });
 
     expect(res.statusCode).toBe(403);
+  });
+});
+
+describe("GET /leagues/:leagueId/slate", () => {
+  it("filters to the league's sports and to the given date, computed in the league's timezone", async () => {
+    const owner = await createTestUser();
+    // America/Chicago is UTC-6 in January (CST) — 2026-01-15 00:00
+    // America/Chicago is 2026-01-15T06:00:00Z.
+    const league = await createTestLeague(owner.id, { sports: ["nfl"], timezone: "America/Chicago" });
+    const member = await createTestLeagueMember(owner.id, league.id, { role: "commissioner" });
+
+    const onDateEarly = await createTestGame({
+      sport: "nfl",
+      homeTeam: "Bills",
+      awayTeam: "Jets",
+      startsAt: new Date("2026-01-15T06:00:00.000Z"), // exactly midnight local — IN range
+    });
+    const onDateLate = await createTestGame({
+      sport: "nfl",
+      homeTeam: "Chiefs",
+      awayTeam: "Raiders",
+      startsAt: new Date("2026-01-16T05:59:59.999Z"), // 1ms before next local midnight — IN range
+    });
+    const justBefore = await createTestGame({
+      sport: "nfl",
+      homeTeam: "Too", // 1ms before local midnight — the PREVIOUS local day
+      awayTeam: "Early",
+      startsAt: new Date("2026-01-15T05:59:59.999Z"),
+    });
+    const justAfter = await createTestGame({
+      sport: "nfl",
+      homeTeam: "Too",
+      awayTeam: "Late",
+      startsAt: new Date("2026-01-16T06:00:00.000Z"), // exactly next local midnight — the NEXT local day
+    });
+    const wrongSport = await createTestGame({
+      sport: "mlb",
+      homeTeam: "Yankees",
+      awayTeam: "Red Sox",
+      startsAt: new Date("2026-01-15T18:00:00.000Z"),
+    });
+
+    const token = await tokenFor(owner.id);
+    const res = await app.inject({
+      method: "GET",
+      url: `/leagues/${league.id}/slate?date=2026-01-15`,
+      headers: auth(token),
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.date).toBe("2026-01-15");
+    const gameIds = body.games.map((g: { gameId: string }) => g.gameId);
+    expect(gameIds.sort()).toEqual([onDateEarly.id, onDateLate.id].sort());
+    expect(gameIds).not.toContain(justBefore.id);
+    expect(gameIds).not.toContain(justAfter.id);
+    expect(gameIds).not.toContain(wrongSport.id);
+    void member;
+  });
+
+  it("defaults to today in the league's timezone when date is omitted", async () => {
+    const owner = await createTestUser();
+    const league = await createTestLeague(owner.id, { sports: ["nfl"], timezone: "UTC" });
+    await createTestLeagueMember(owner.id, league.id, { role: "commissioner" });
+    await createTestGame({ sport: "nfl", startsAt: new Date() });
+
+    const token = await tokenFor(owner.id);
+    const res = await app.inject({ method: "GET", url: `/leagues/${league.id}/slate`, headers: auth(token) });
+
+    expect(res.statusCode).toBe(200);
+    const today = new Date().toISOString().slice(0, 10);
+    expect(res.json().date).toBe(today);
+  });
+
+  it("computes all five pickState values correctly", async () => {
+    // Two separate fixed, hardcoded dates rather than anything relative
+    // to real wall-clock "now": a comfortably-past date for the three
+    // already-started games and a comfortably-future date for the two
+    // still-open games. Anchoring "open" games to "now + 1 hour" would
+    // make this test's pass/fail depend on what time of day it happens
+    // to run relative to a UTC day boundary — exactly the kind of
+    // flakiness this suite otherwise goes out of its way to avoid.
+    const PAST_DATE = "2020-01-15";
+    const FUTURE_DATE = "2099-01-15";
+
+    const owner = await createTestUser();
+    const league = await createTestLeague(owner.id, { sports: ["nfl"], timezone: "UTC" });
+    const member = await createTestLeagueMember(owner.id, league.id, { role: "commissioner" });
+
+    const unpickedGame = await createTestGame({ sport: "nfl", homeTeam: "A1", awayTeam: "A2", startsAt: new Date(`${FUTURE_DATE}T12:00:00.000Z`) });
+    const pickedOpenGame = await createTestGame({ sport: "nfl", homeTeam: "B1", awayTeam: "B2", startsAt: new Date(`${FUTURE_DATE}T13:00:00.000Z`) });
+    await createTestPick(member.id, pickedOpenGame.id, { selectedTeam: "B1" });
+
+    const lockedNoResultGame = await createTestGame({ sport: "nfl", homeTeam: "C1", awayTeam: "C2", startsAt: new Date(`${PAST_DATE}T12:00:00.000Z`), status: "in_progress" });
+    await createTestPick(member.id, lockedNoResultGame.id, { selectedTeam: "C1" });
+
+    const hitGame = await createTestGame({ sport: "nfl", homeTeam: "D1", awayTeam: "D2", startsAt: new Date(`${PAST_DATE}T13:00:00.000Z`), status: "final" });
+    await createTestPick(member.id, hitGame.id, { selectedTeam: "D1" });
+    await db.insert(result).values({ gameId: hitGame.id, winningTeam: "D1", source: "seed" });
+
+    const missGame = await createTestGame({ sport: "nfl", homeTeam: "E1", awayTeam: "E2", startsAt: new Date(`${PAST_DATE}T14:00:00.000Z`), status: "final" });
+    await createTestPick(member.id, missGame.id, { selectedTeam: "E1" });
+    await db.insert(result).values({ gameId: missGame.id, winningTeam: "E2", source: "seed" });
+
+    const token = await tokenFor(owner.id);
+
+    const futureRes = await app.inject({ method: "GET", url: `/leagues/${league.id}/slate?date=${FUTURE_DATE}`, headers: auth(token) });
+    const futureByGame = new Map(futureRes.json().games.map((g: { gameId: string; pickState: string }) => [g.gameId, g.pickState]));
+    expect(futureByGame.get(unpickedGame.id)).toBe("unpicked");
+    expect(futureByGame.get(pickedOpenGame.id)).toBe("picked_open");
+
+    const pastRes = await app.inject({ method: "GET", url: `/leagues/${league.id}/slate?date=${PAST_DATE}`, headers: auth(token) });
+    const pastByGame = new Map(pastRes.json().games.map((g: { gameId: string; pickState: string }) => [g.gameId, g.pickState]));
+    expect(pastByGame.get(lockedNoResultGame.id)).toBe("locked");
+    expect(pastByGame.get(hitGame.id)).toBe("final_hit");
+    expect(pastByGame.get(missGame.id)).toBe("final_miss");
+  });
+
+  it("pickedCount/totalCount reflect the caller's own picks for the slate", async () => {
+    const owner = await createTestUser();
+    const league = await createTestLeague(owner.id, { sports: ["nfl"], timezone: "UTC" });
+    const member = await createTestLeagueMember(owner.id, league.id, { role: "commissioner" });
+    const todayIso = new Date().toISOString().slice(0, 10);
+    const baseTime = new Date(`${todayIso}T12:00:00.000Z`);
+
+    const picked = await createTestGame({ sport: "nfl", startsAt: new Date(baseTime.getTime() + 3600_000) });
+    await createTestPick(member.id, picked.id, { selectedTeam: "Home" });
+    await createTestGame({ sport: "nfl", startsAt: new Date(baseTime.getTime() + 3600_000) });
+    await createTestGame({ sport: "nfl", startsAt: new Date(baseTime.getTime() + 3600_000) });
+
+    const token = await tokenFor(owner.id);
+    const res = await app.inject({ method: "GET", url: `/leagues/${league.id}/slate?date=${todayIso}`, headers: auth(token) });
+
+    expect(res.json()).toMatchObject({ pickedCount: 1, totalCount: 3 });
+  });
+
+  describe("privacy (JAC-35)", () => {
+    it("before lock: shows hasPicked for other members but never their selectedTeam, while the caller's own myPick is always visible", async () => {
+      const owner = await createTestUser();
+      const other = await createTestUser();
+      const league = await createTestLeague(owner.id, { sports: ["nfl"], timezone: "UTC" });
+      const ownerMember = await createTestLeagueMember(owner.id, league.id, { role: "commissioner" });
+      const otherMember = await createTestLeagueMember(other.id, league.id, { role: "member" });
+
+      const game = await createTestGame({
+        sport: "nfl",
+        homeTeam: "Bills",
+        awayTeam: "Jets",
+        startsAt: new Date(Date.now() + 3600_000),
+      });
+      await createTestPick(ownerMember.id, game.id, { selectedTeam: "Bills" });
+      await createTestPick(otherMember.id, game.id, { selectedTeam: "Jets" });
+
+      const token = await tokenFor(owner.id);
+      const res = await app.inject({
+        method: "GET",
+        url: `/leagues/${league.id}/slate?date=${new Date(game.startsAt).toISOString().slice(0, 10)}`,
+        headers: auth(token),
+      });
+
+      const slateGame = res.json().games.find((g: { gameId: string }) => g.gameId === game.id);
+      expect(slateGame.locked).toBe(false);
+      expect(slateGame.myPick).toBe("Bills"); // caller's own — always visible
+      const otherEntry = slateGame.otherPicks.find((p: { leagueMemberId: string }) => p.leagueMemberId === otherMember.id);
+      expect(otherEntry.hasPicked).toBe(true); // who has picked — visible
+      expect(otherEntry.selectedTeam).toBeNull(); // what they picked — hidden before lock
+    });
+
+    it("after lock: reveals other members' selectedTeam too", async () => {
+      const owner = await createTestUser();
+      const other = await createTestUser();
+      const league = await createTestLeague(owner.id, { sports: ["nfl"], timezone: "UTC" });
+      const ownerMember = await createTestLeagueMember(owner.id, league.id, { role: "commissioner" });
+      const otherMember = await createTestLeagueMember(other.id, league.id, { role: "member" });
+
+      const game = await createTestGame({
+        sport: "nfl",
+        homeTeam: "Bills",
+        awayTeam: "Jets",
+        startsAt: new Date(Date.now() - 3600_000), // already started -> locked
+        status: "in_progress",
+      });
+      await createTestPick(ownerMember.id, game.id, { selectedTeam: "Bills" });
+      await createTestPick(otherMember.id, game.id, { selectedTeam: "Jets" });
+
+      const token = await tokenFor(owner.id);
+      const res = await app.inject({
+        method: "GET",
+        url: `/leagues/${league.id}/slate?date=${new Date(game.startsAt).toISOString().slice(0, 10)}`,
+        headers: auth(token),
+      });
+
+      const slateGame = res.json().games.find((g: { gameId: string }) => g.gameId === game.id);
+      expect(slateGame.locked).toBe(true);
+      const otherEntry = slateGame.otherPicks.find((p: { leagueMemberId: string }) => p.leagueMemberId === otherMember.id);
+      expect(otherEntry.hasPicked).toBe(true);
+      expect(otherEntry.selectedTeam).toBe("Jets"); // revealed once locked
+    });
+
+    it("a non-member cannot view the slate — real 403 over HTTP", async () => {
+      const owner = await createTestUser();
+      const league = await createTestLeague(owner.id, { sports: ["nfl"] });
+      await createTestLeagueMember(owner.id, league.id, { role: "commissioner" });
+      const outsider = await createTestUser();
+
+      const token = await tokenFor(outsider.id);
+      const res = await app.inject({ method: "GET", url: `/leagues/${league.id}/slate`, headers: auth(token) });
+
+      expect(res.statusCode).toBe(403);
+    });
   });
 });
