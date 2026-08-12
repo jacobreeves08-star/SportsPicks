@@ -20,3 +20,14 @@ export function generateInviteCode(): string {
   }
   return code;
 }
+
+/**
+ * True if `err` (as thrown by Drizzle, which wraps the real driver error
+ * on `.cause`) is a Postgres unique-violation (SQLSTATE 23505) — used to
+ * retry invite-code generation on the astronomically rare collision
+ * rather than failing the whole request.
+ */
+export function isUniqueConstraintViolation(err: unknown): boolean {
+  const cause = err instanceof Error ? (err.cause ?? err) : err;
+  return typeof cause === "object" && cause !== null && "code" in cause && cause.code === "23505";
+}

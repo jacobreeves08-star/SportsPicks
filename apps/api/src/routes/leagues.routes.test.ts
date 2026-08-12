@@ -1,5 +1,8 @@
+import { and, eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { buildApp } from "../app.js";
+import { db } from "../db/client.js";
+import { leagueMember, pick, result } from "../db/schema.js";
 import {
   createTestGame,
   createTestLeague,
@@ -147,5 +150,503 @@ describe("PATCH /leagues/:leagueId — commissioner-only check", () => {
 
     expect(res.statusCode).toBe(403);
     expect(res.json().error.code).toBe("FORBIDDEN");
+  });
+});
+
+describe("POST /leagues — create", () => {
+  it("creates a league, makes the creator commissioner and first member, and issues an invite code", async () => {
+    const creator = await createTestUser({ timezone: "America/Chicago" });
+    const token = await tokenFor(creator.id);
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/leagues",
+      headers: auth(token),
+      payload: { name: "Office League", sports: ["nfl", "nba"], seasonStart: "2026-09-01" },
+    });
+
+    expect(res.statusCode).toBe(201);
+    const body = res.json();
+    expect(body.name).toBe("Office League");
+    expect(body.commissionerId).toBe(creator.id);
+    expect(body.timezone).toBe("America/Chicago"); // defaulted from the creator
+    expect(body.memberCount).toBe(1);
+    expect(typeof body.inviteCode).toBe("string");
+    expect(body.inviteCode).toHaveLength(8);
+
+    const [member] = await db
+      .select()
+      .from(leagueMember)
+      .where(and(eq(leagueMember.userId, creator.id), eq(leagueMember.leagueId, body.id)));
+    expect(member!.role).toBe("commissioner");
+  });
+
+  it("rejects an unknown sport code", async () => {
+    const creator = await createTestUser();
+    const token = await tokenFor(creator.id);
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/leagues",
+      headers: auth(token),
+      payload: { name: "Bad Sport League", sports: ["curling"], seasonStart: "2026-09-01" },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.code).toBe("VALIDATION_ERROR");
+  });
+
+  it("rejects an offensive league name", async () => {
+    const creator = await createTestUser();
+    const token = await tokenFor(creator.id);
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/leagues",
+      headers: auth(token),
+      payload: { name: "This League is Shit", sports: ["nfl"], seasonStart: "2026-09-01" },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.code).toBe("VALIDATION_ERROR");
+    expect(res.json().error.fields[0].field).toBe("name");
+  });
+
+  it("enforces MAX_LEAGUES_PER_USER", async () => {
+    const creator = await createTestUser();
+    const token = await tokenFor(creator.id);
+
+    // env.MAX_LEAGUES_PER_USER defaults to 25 — create leagues up to the
+    // limit directly via the fixture (fast), then confirm the 26th via
+    // the real route is rejected.
+    for (let i = 0; i < 25; i++) {
+      const l = await createTestLeague(creator.id, { name: `League ${i}` });
+      await createTestLeagueMember(creator.id, l.id, { role: "commissioner" });
+    }
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/leagues",
+      headers: auth(token),
+      payload: { name: "One Too Many", sports: ["nfl"], seasonStart: "2026-09-01" },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error.code).toBe("MAX_LEAGUES_REACHED");
+  });
+});
+
+describe("GET /leagues — multi-league home screen", () => {
+  it("returns record, rank, gamesParticipated, and unpickedCount for each active league", async () => {
+    const alice = await createTestUser();
+    const bob = await createTestUser();
+    const testLeague = await createTestLeague(alice.id, { sports: ["nfl"] });
+    const aliceMember = await createTestLeagueMember(alice.id, testLeague.id, { role: "commissioner" });
+    await createTestLeagueMember(bob.id, testLeague.id, { role: "member" });
+
+    const gradedWin = await createTestGame({ sport: "nfl", homeTeam: "Bills", awayTeam: "Jets", status: "final" });
+    await db.insert(result).values({ gameId: gradedWin.id, winningTeam: "Bills", source: "seed" });
+    await createTestPick(aliceMember.id, gradedWin.id, { selectedTeam: "Bills" });
+
+    const upcoming = await createTestGame({
+      sport: "nfl",
+      homeTeam: "Chiefs",
+      awayTeam: "Raiders",
+      startsAt: new Date(Date.now() + 3600_000),
+    });
+
+    const token = await tokenFor(alice.id);
+    const res = await app.inject({ method: "GET", url: "/leagues", headers: auth(token) });
+
+    expect(res.statusCode).toBe(200);
+    const [entry] = res.json();
+    expect(entry.id).toBe(testLeague.id);
+    expect(entry.record).toEqual({ wins: 1, losses: 0 });
+    expect(entry.gamesParticipated).toBe(1);
+    expect(entry.rank).toBe(1);
+    expect(entry.memberCount).toBe(2);
+    expect(entry.unpickedCount).toBe(1); // `upcoming` has no pick yet
+    expect(entry.nextLockAt).not.toBeNull();
+    void upcoming;
+  });
+
+  it("orders leagues with open picks before leagues with none, soonest lock first", async () => {
+    const alice = await createTestUser();
+    const leagueWithOpenPicks = await createTestLeague(alice.id, { name: "Has Open Picks", sports: ["nfl"] });
+    await createTestLeagueMember(alice.id, leagueWithOpenPicks.id, { role: "commissioner" });
+    await createTestGame({ sport: "nfl", startsAt: new Date(Date.now() + 3600_000) });
+
+    const leagueWithNoOpenPicks = await createTestLeague(alice.id, { name: "All Caught Up", sports: ["mlb"] });
+    await createTestLeagueMember(alice.id, leagueWithNoOpenPicks.id, { role: "commissioner" });
+
+    const token = await tokenFor(alice.id);
+    const res = await app.inject({ method: "GET", url: "/leagues", headers: auth(token) });
+
+    const names = res.json().map((l: { name: string }) => l.name);
+    expect(names[0]).toBe("Has Open Picks");
+    expect(names[1]).toBe("All Caught Up");
+  });
+
+  it("returns an empty array for a user in no leagues", async () => {
+    const lonely = await createTestUser();
+    const token = await tokenFor(lonely.id);
+    const res = await app.inject({ method: "GET", url: "/leagues", headers: auth(token) });
+    expect(res.json()).toEqual([]);
+  });
+});
+
+describe("Sports-selection freeze", () => {
+  it("allows changing sports before any game is graded", async () => {
+    const owner = await createTestUser();
+    const testLeague = await createTestLeague(owner.id, { sports: ["nfl"] });
+    await createTestLeagueMember(owner.id, testLeague.id, { role: "commissioner" });
+
+    const token = await tokenFor(owner.id);
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/leagues/${testLeague.id}`,
+      headers: auth(token),
+      payload: { sports: ["nfl", "nba"] },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().sports).toEqual(["nfl", "nba"]);
+  });
+
+  it("rejects changing sports once the league has a graded game", async () => {
+    const owner = await createTestUser();
+    const testLeague = await createTestLeague(owner.id, {
+      sports: ["nfl"],
+      seasonStart: "2020-01-01",
+      timezone: "UTC",
+    });
+    await createTestLeagueMember(owner.id, testLeague.id, { role: "commissioner" });
+
+    const gradedGame = await createTestGame({
+      sport: "nfl",
+      status: "final",
+      startsAt: new Date("2020-06-01T00:00:00Z"),
+    });
+    await db.insert(result).values({ gameId: gradedGame.id, winningTeam: "Home", source: "seed" });
+
+    const token = await tokenFor(owner.id);
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/leagues/${testLeague.id}`,
+      headers: auth(token),
+      payload: { sports: ["nba"] },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error.code).toBe("SPORTS_SELECTION_FROZEN");
+  });
+});
+
+describe("DELETE /leagues/:leagueId — commissioner deletes the league", () => {
+  it("cascades to members and picks", async () => {
+    const owner = await createTestUser();
+    const testLeague = await createTestLeague(owner.id);
+    const ownerMember = await createTestLeagueMember(owner.id, testLeague.id, { role: "commissioner" });
+    const g = await createTestGame({ homeTeam: "Bills", awayTeam: "Jets" });
+    await createTestPick(ownerMember.id, g.id, { selectedTeam: "Bills" });
+
+    const token = await tokenFor(owner.id);
+    const res = await app.inject({ method: "DELETE", url: `/leagues/${testLeague.id}`, headers: auth(token) });
+
+    expect(res.statusCode).toBe(204);
+    const remainingPicks = await db.select().from(pick).where(eq(pick.leagueMemberId, ownerMember.id));
+    expect(remainingPicks).toHaveLength(0);
+    const remainingMembers = await db.select().from(leagueMember).where(eq(leagueMember.leagueId, testLeague.id));
+    expect(remainingMembers).toHaveLength(0);
+  });
+
+  it("a non-commissioner cannot delete the league", async () => {
+    const owner = await createTestUser();
+    const testLeague = await createTestLeague(owner.id);
+    await createTestLeagueMember(owner.id, testLeague.id, { role: "commissioner" });
+    const regular = await createTestUser();
+    await createTestLeagueMember(regular.id, testLeague.id, { role: "member" });
+
+    const token = await tokenFor(regular.id);
+    const res = await app.inject({ method: "DELETE", url: `/leagues/${testLeague.id}`, headers: auth(token) });
+
+    expect(res.statusCode).toBe(403);
+  });
+});
+
+describe("POST /leagues/:leagueId/transfer-commissioner", () => {
+  it("transfers the role and updates who passes requireLeagueCommissioner", async () => {
+    const owner = await createTestUser();
+    const other = await createTestUser();
+    const testLeague = await createTestLeague(owner.id);
+    await createTestLeagueMember(owner.id, testLeague.id, { role: "commissioner" });
+    const otherMember = await createTestLeagueMember(other.id, testLeague.id, { role: "member" });
+
+    const token = await tokenFor(owner.id);
+    const res = await app.inject({
+      method: "POST",
+      url: `/leagues/${testLeague.id}/transfer-commissioner`,
+      headers: auth(token),
+      payload: { newCommissionerMemberId: otherMember.id },
+    });
+
+    expect(res.statusCode).toBe(200);
+
+    // The old commissioner can no longer rename the league...
+    const oldOwnerAttempt = await app.inject({
+      method: "PATCH",
+      url: `/leagues/${testLeague.id}`,
+      headers: auth(token),
+      payload: { name: "Should Fail" },
+    });
+    expect(oldOwnerAttempt.statusCode).toBe(403);
+
+    // ...and the new commissioner can.
+    const newOwnerToken = await tokenFor(other.id);
+    const newOwnerAttempt = await app.inject({
+      method: "PATCH",
+      url: `/leagues/${testLeague.id}`,
+      headers: auth(newOwnerToken),
+      payload: { name: "New Commissioner Renamed It" },
+    });
+    expect(newOwnerAttempt.statusCode).toBe(200);
+  });
+
+  it("rejects transferring to someone who isn't an active member", async () => {
+    const owner = await createTestUser();
+    const testLeague = await createTestLeague(owner.id);
+    await createTestLeagueMember(owner.id, testLeague.id, { role: "commissioner" });
+
+    const token = await tokenFor(owner.id);
+    const res = await app.inject({
+      method: "POST",
+      url: `/leagues/${testLeague.id}/transfer-commissioner`,
+      headers: auth(token),
+      payload: { newCommissionerMemberId: "00000000-0000-0000-0000-000000000099" },
+    });
+
+    expect(res.statusCode).toBe(400);
+  });
+});
+
+describe("POST /leagues/:leagueId/leave", () => {
+  it("a regular member can leave; leaving is soft (picks preserved, left_at set)", async () => {
+    const owner = await createTestUser();
+    const departing = await createTestUser();
+    const testLeague = await createTestLeague(owner.id);
+    await createTestLeagueMember(owner.id, testLeague.id, { role: "commissioner" });
+    const departingMember = await createTestLeagueMember(departing.id, testLeague.id, { role: "member" });
+    const g = await createTestGame({ homeTeam: "Bills", awayTeam: "Jets" });
+    await createTestPick(departingMember.id, g.id, { selectedTeam: "Bills" });
+
+    const token = await tokenFor(departing.id);
+    const res = await app.inject({ method: "POST", url: `/leagues/${testLeague.id}/leave`, headers: auth(token) });
+
+    expect(res.statusCode).toBe(200);
+    const [row] = await db.select().from(leagueMember).where(eq(leagueMember.id, departingMember.id));
+    expect(row!.leftAt).not.toBeNull();
+    const picks = await db.select().from(pick).where(eq(pick.leagueMemberId, departingMember.id));
+    expect(picks).toHaveLength(1); // untouched
+
+    // And can no longer read league picks — requireLeagueMembership now
+    // filters left_at.
+    const afterLeave = await app.inject({
+      method: "GET",
+      url: `/leagues/${testLeague.id}/picks`,
+      headers: auth(token),
+    });
+    expect(afterLeave.statusCode).toBe(403);
+  });
+
+  it("blocks the sole commissioner from leaving while other members remain", async () => {
+    const owner = await createTestUser();
+    const other = await createTestUser();
+    const testLeague = await createTestLeague(owner.id);
+    await createTestLeagueMember(owner.id, testLeague.id, { role: "commissioner" });
+    await createTestLeagueMember(other.id, testLeague.id, { role: "member" });
+
+    const token = await tokenFor(owner.id);
+    const res = await app.inject({ method: "POST", url: `/leagues/${testLeague.id}/leave`, headers: auth(token) });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error.code).toBe("COMMISSIONER_MUST_TRANSFER_FIRST");
+  });
+
+  it("directs the sole remaining member (also commissioner) to delete instead of leave", async () => {
+    const owner = await createTestUser();
+    const testLeague = await createTestLeague(owner.id);
+    await createTestLeagueMember(owner.id, testLeague.id, { role: "commissioner" });
+
+    const token = await tokenFor(owner.id);
+    const res = await app.inject({ method: "POST", url: `/leagues/${testLeague.id}/leave`, headers: auth(token) });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error.code).toBe("SOLE_MEMBER_USE_DELETE");
+  });
+});
+
+describe("DELETE /leagues/:leagueId/members/:memberId — commissioner removes a member", () => {
+  it("removes the member (soft) while preserving their picks", async () => {
+    const owner = await createTestUser();
+    const target = await createTestUser();
+    const testLeague = await createTestLeague(owner.id);
+    await createTestLeagueMember(owner.id, testLeague.id, { role: "commissioner" });
+    const targetMember = await createTestLeagueMember(target.id, testLeague.id, { role: "member" });
+    const g = await createTestGame({ homeTeam: "Bills", awayTeam: "Jets" });
+    await createTestPick(targetMember.id, g.id, { selectedTeam: "Bills" });
+
+    const token = await tokenFor(owner.id);
+    const res = await app.inject({
+      method: "DELETE",
+      url: `/leagues/${testLeague.id}/members/${targetMember.id}`,
+      headers: auth(token),
+    });
+
+    expect(res.statusCode).toBe(204);
+    const [row] = await db.select().from(leagueMember).where(eq(leagueMember.id, targetMember.id));
+    expect(row!.leftAt).not.toBeNull();
+    const picks = await db.select().from(pick).where(eq(pick.leagueMemberId, targetMember.id));
+    expect(picks).toHaveLength(1);
+  });
+
+  it("the commissioner cannot remove themselves via this route", async () => {
+    const owner = await createTestUser();
+    const testLeague = await createTestLeague(owner.id);
+    const ownerMember = await createTestLeagueMember(owner.id, testLeague.id, { role: "commissioner" });
+
+    const token = await tokenFor(owner.id);
+    const res = await app.inject({
+      method: "DELETE",
+      url: `/leagues/${testLeague.id}/members/${ownerMember.id}`,
+      headers: auth(token),
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.code).toBe("CANNOT_REMOVE_SELF");
+  });
+
+  it("a non-commissioner cannot remove another member", async () => {
+    const owner = await createTestUser();
+    const target = await createTestUser();
+    const regular = await createTestUser();
+    const testLeague = await createTestLeague(owner.id);
+    await createTestLeagueMember(owner.id, testLeague.id, { role: "commissioner" });
+    const targetMember = await createTestLeagueMember(target.id, testLeague.id, { role: "member" });
+    await createTestLeagueMember(regular.id, testLeague.id, { role: "member" });
+
+    const token = await tokenFor(regular.id);
+    const res = await app.inject({
+      method: "DELETE",
+      url: `/leagues/${testLeague.id}/members/${targetMember.id}`,
+      headers: auth(token),
+    });
+
+    expect(res.statusCode).toBe(403);
+  });
+});
+
+describe("GET /leagues/:leagueId/members — pagination", () => {
+  it("paginates and excludes departed members", async () => {
+    const owner = await createTestUser();
+    const testLeague = await createTestLeague(owner.id);
+    await createTestLeagueMember(owner.id, testLeague.id, { role: "commissioner" });
+    for (let i = 0; i < 3; i++) {
+      const u = await createTestUser();
+      await createTestLeagueMember(u.id, testLeague.id, { role: "member" });
+    }
+    const departedUser = await createTestUser();
+    await createTestLeagueMember(departedUser.id, testLeague.id, { role: "member", leftAt: new Date() });
+
+    const token = await tokenFor(owner.id);
+    const page1 = await app.inject({
+      method: "GET",
+      url: `/leagues/${testLeague.id}/members?limit=2`,
+      headers: auth(token),
+    });
+
+    expect(page1.statusCode).toBe(200);
+    const body1 = page1.json();
+    expect(body1.data).toHaveLength(2);
+    expect(body1.pagination.next_cursor).not.toBeNull();
+
+    const page2 = await app.inject({
+      method: "GET",
+      url: `/leagues/${testLeague.id}/members?limit=2&cursor=${encodeURIComponent(body1.pagination.next_cursor)}`,
+      headers: auth(token),
+    });
+    const body2 = page2.json();
+    expect(body2.data).toHaveLength(2); // 4 active members total (owner + 3), page 2 has the remaining 2
+    expect(body2.pagination.next_cursor).toBeNull();
+
+    const allIds = [...body1.data, ...body2.data].map((m: { id: string }) => m.id);
+    expect(new Set(allIds).size).toBe(4);
+    expect(allIds).not.toContain(
+      (await db.select().from(leagueMember).where(eq(leagueMember.userId, departedUser.id)))[0]!.id,
+    );
+  });
+});
+
+describe("Member reporting", () => {
+  it("a member can report another member, and the commissioner can see it", async () => {
+    const owner = await createTestUser();
+    const reporter = await createTestUser();
+    const reported = await createTestUser();
+    const testLeague = await createTestLeague(owner.id);
+    await createTestLeagueMember(owner.id, testLeague.id, { role: "commissioner" });
+    const reporterMember = await createTestLeagueMember(reporter.id, testLeague.id, { role: "member" });
+    const reportedMember = await createTestLeagueMember(reported.id, testLeague.id, { role: "member" });
+
+    const token = await tokenFor(reporter.id);
+    const reportRes = await app.inject({
+      method: "POST",
+      url: `/leagues/${testLeague.id}/members/${reportedMember.id}/report`,
+      headers: auth(token),
+      payload: { reason: "Trash talk got personal" },
+    });
+    expect(reportRes.statusCode).toBe(201);
+    void reporterMember;
+
+    const ownerToken = await tokenFor(owner.id);
+    const listRes = await app.inject({
+      method: "GET",
+      url: `/leagues/${testLeague.id}/reports`,
+      headers: auth(ownerToken),
+    });
+    expect(listRes.statusCode).toBe(200);
+    expect(listRes.json()).toHaveLength(1);
+    expect(listRes.json()[0].reason).toBe("Trash talk got personal");
+  });
+
+  it("cannot report yourself", async () => {
+    const owner = await createTestUser();
+    const testLeague = await createTestLeague(owner.id);
+    const ownerMember = await createTestLeagueMember(owner.id, testLeague.id, { role: "commissioner" });
+
+    const token = await tokenFor(owner.id);
+    const res = await app.inject({
+      method: "POST",
+      url: `/leagues/${testLeague.id}/members/${ownerMember.id}/report`,
+      headers: auth(token),
+      payload: { reason: "self" },
+    });
+
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("a non-commissioner cannot view the report list", async () => {
+    const owner = await createTestUser();
+    const regular = await createTestUser();
+    const testLeague = await createTestLeague(owner.id);
+    await createTestLeagueMember(owner.id, testLeague.id, { role: "commissioner" });
+    await createTestLeagueMember(regular.id, testLeague.id, { role: "member" });
+
+    const token = await tokenFor(regular.id);
+    const res = await app.inject({
+      method: "GET",
+      url: `/leagues/${testLeague.id}/reports`,
+      headers: auth(token),
+    });
+
+    expect(res.statusCode).toBe(403);
   });
 });
