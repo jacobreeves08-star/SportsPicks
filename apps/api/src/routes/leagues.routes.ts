@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { and, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 import { db } from "../db/client.js";
-import { game, league, leagueMember, leagueMemberReport, leagueInviteCode, pick, user } from "../db/schema.js";
+import { game, league, leagueMember, leagueMemberReport, leagueInviteCode, pick, pickAuditLog, user } from "../db/schema.js";
 import { authenticate } from "../plugins/authenticate.js";
 import { containsDisallowedContent } from "../lib/content-filter.js";
 import { captureException } from "../lib/error-tracking.js";
@@ -34,6 +34,37 @@ function decodeCursor(cursor: string): { joinedAt: string; id: string } | null {
       typeof parsed.id === "string"
     ) {
       return { joinedAt: parsed.joinedAt, id: parsed.id };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+const AUDIT_LOG_PAGE_DEFAULT_LIMIT = 25;
+const AUDIT_LOG_PAGE_MAX_LIMIT = 100;
+
+// Same cursor shape/pattern as encodeCursor/decodeCursor above, over
+// createdAt instead of joinedAt — kept as a separate small pair rather
+// than generalizing the existing one, so this doesn't risk touching
+// already-verified members-pagination behavior for a two-call-site
+// abstraction.
+function encodeAuditLogCursor(createdAt: Date, id: string): string {
+  return Buffer.from(JSON.stringify({ createdAt: createdAt.toISOString(), id })).toString("base64url");
+}
+
+function decodeAuditLogCursor(cursor: string): { createdAt: string; id: string } | null {
+  try {
+    const parsed: unknown = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8"));
+    if (
+      typeof parsed === "object" &&
+      parsed !== null &&
+      "createdAt" in parsed &&
+      "id" in parsed &&
+      typeof parsed.createdAt === "string" &&
+      typeof parsed.id === "string"
+    ) {
+      return { createdAt: parsed.createdAt, id: parsed.id };
     }
     return null;
   } catch {
@@ -920,6 +951,95 @@ export async function leaguesRoutes(app: FastifyInstance): Promise<void> {
       await requireLeagueCommissioner(request.user!.id, leagueId);
 
       return db.select().from(leagueMemberReport).where(eq(leagueMemberReport.leagueId, leagueId));
+    },
+  );
+
+  /**
+   * The append-only audit trail (JAC-36), commissioner-only, cursor-
+   * paginated per the established convention. This is a pure read —
+   * pick_audit_log is never mutated or deleted by any application code
+   * path, backstopped at the DB level by triggers that unconditionally
+   * reject UPDATE/DELETE (0005_picks.sql). Optional gameId/memberId
+   * filters narrow "who picked what for this specific game" or "this
+   * member's full pick history," the two shapes a "I definitely picked
+   * them" dispute actually needs.
+   */
+  app.get(
+    "/:leagueId/audit-log",
+    {
+      schema: {
+        params: { type: "object", required: ["leagueId"], properties: { leagueId: { type: "string" } } },
+        querystring: {
+          type: "object",
+          properties: {
+            limit: { type: "integer", minimum: 1 },
+            cursor: { type: "string" },
+            gameId: { type: "string" },
+            memberId: { type: "string" },
+          },
+        },
+      },
+    },
+    async (request) => {
+      const { leagueId } = request.params as { leagueId: string };
+      const { limit: rawLimit, cursor, gameId, memberId } = request.query as {
+        limit?: number;
+        cursor?: string;
+        gameId?: string;
+        memberId?: string;
+      };
+      await requireLeagueCommissioner(request.user!.id, leagueId);
+
+      const limit = Math.min(rawLimit ?? AUDIT_LOG_PAGE_DEFAULT_LIMIT, AUDIT_LOG_PAGE_MAX_LIMIT);
+
+      const decoded = cursor ? decodeAuditLogCursor(cursor) : null;
+      if (cursor && !decoded) {
+        throw new ApiError("VALIDATION_ERROR", "Request failed validation", 400, [
+          { field: "cursor", message: "invalid cursor" },
+        ]);
+      }
+
+      const rows = await db
+        .select({
+          id: pickAuditLog.id,
+          leagueMemberId: pickAuditLog.leagueMemberId,
+          displayName: user.displayName,
+          gameId: pickAuditLog.gameId,
+          selectedTeam: pickAuditLog.selectedTeam,
+          action: pickAuditLog.action,
+          createdAt: pickAuditLog.createdAt,
+        })
+        .from(pickAuditLog)
+        .innerJoin(leagueMember, eq(leagueMember.id, pickAuditLog.leagueMemberId))
+        .innerJoin(user, eq(user.id, leagueMember.userId))
+        .where(
+          and(
+            eq(leagueMember.leagueId, leagueId),
+            gameId ? eq(pickAuditLog.gameId, gameId) : undefined,
+            memberId ? eq(pickAuditLog.leagueMemberId, memberId) : undefined,
+            // Same date_trunc('milliseconds', ...) precision fix as the
+            // members-list cursor — see its comment for why comparing
+            // the raw column against a millisecond-truncated cursor
+            // value would let a boundary row reappear on the next page.
+            decoded
+              ? sql`(date_trunc('milliseconds', ${pickAuditLog.createdAt}), ${pickAuditLog.id}) > (${decoded.createdAt}::timestamptz, ${decoded.id})`
+              : undefined,
+          ),
+        )
+        .orderBy(sql`date_trunc('milliseconds', ${pickAuditLog.createdAt})`, pickAuditLog.id)
+        .limit(limit + 1);
+
+      const hasNext = rows.length > limit;
+      const page = hasNext ? rows.slice(0, limit) : rows;
+      const last = page[page.length - 1];
+
+      return {
+        data: page,
+        pagination: {
+          next_cursor: hasNext && last ? encodeAuditLogCursor(last.createdAt, last.id) : null,
+          limit,
+        },
+      };
     },
   );
 }

@@ -8,6 +8,7 @@ import {
   createTestLeague,
   createTestLeagueMember,
   createTestPick,
+  createTestPickAuditLog,
   createTestUser,
   truncateAllTables,
 } from "../db/test-helpers.js";
@@ -375,5 +376,144 @@ describe("GET /leagues/:leagueId/slate", () => {
 
       expect(res.statusCode).toBe(403);
     });
+  });
+});
+
+describe("GET /leagues/:leagueId/audit-log", () => {
+  it("records every pick write, including create-then-change", async () => {
+    const owner = await createTestUser();
+    const league = await createTestLeague(owner.id, { sports: ["nfl"] });
+    const member = await createTestLeagueMember(owner.id, league.id, { role: "commissioner" });
+    const g = await createTestGame({ homeTeam: "Bills", awayTeam: "Jets", startsAt: minutesFromNow(60) });
+
+    const token = await tokenFor(owner.id);
+    await app.inject({
+      method: "PUT",
+      url: `/leagues/${league.id}/members/${member.id}/picks/${g.id}`,
+      headers: auth(token),
+      payload: { selectedTeam: "Bills" },
+    });
+    await app.inject({
+      method: "PUT",
+      url: `/leagues/${league.id}/members/${member.id}/picks/${g.id}`,
+      headers: auth(token),
+      payload: { selectedTeam: "Jets" },
+    });
+
+    const res = await app.inject({
+      method: "GET",
+      url: `/leagues/${league.id}/audit-log`,
+      headers: auth(token),
+    });
+
+    expect(res.statusCode).toBe(200);
+    const { data } = res.json();
+    expect(data).toHaveLength(2);
+    expect(data.map((r: { action: string }) => r.action)).toEqual(["create", "change"]);
+    expect(data.map((r: { selectedTeam: string }) => r.selectedTeam)).toEqual(["Bills", "Jets"]);
+    expect(data[0].displayName).toBe(owner.displayName); // sanity: joined display name present
+  });
+
+  it("filters by gameId and by memberId", async () => {
+    const owner = await createTestUser();
+    const other = await createTestUser();
+    const league = await createTestLeague(owner.id, { sports: ["nfl"] });
+    const ownerMember = await createTestLeagueMember(owner.id, league.id, { role: "commissioner" });
+    const otherMember = await createTestLeagueMember(other.id, league.id, { role: "member" });
+    const gameA = await createTestGame({ homeTeam: "Bills", awayTeam: "Jets", startsAt: minutesFromNow(60) });
+    const gameB = await createTestGame({ homeTeam: "Chiefs", awayTeam: "Raiders", startsAt: minutesFromNow(60) });
+
+    await createTestPickAuditLog(ownerMember.id, gameA.id, { selectedTeam: "Bills" });
+    await createTestPickAuditLog(ownerMember.id, gameB.id, { selectedTeam: "Chiefs" });
+    await createTestPickAuditLog(otherMember.id, gameA.id, { selectedTeam: "Jets" });
+
+    const token = await tokenFor(owner.id);
+
+    const byGame = await app.inject({
+      method: "GET",
+      url: `/leagues/${league.id}/audit-log?gameId=${gameA.id}`,
+      headers: auth(token),
+    });
+    expect(byGame.json().data).toHaveLength(2);
+
+    const byMember = await app.inject({
+      method: "GET",
+      url: `/leagues/${league.id}/audit-log?memberId=${ownerMember.id}`,
+      headers: auth(token),
+    });
+    expect(byMember.json().data).toHaveLength(2);
+  });
+
+  it("a non-commissioner cannot view the audit log", async () => {
+    const owner = await createTestUser();
+    const regular = await createTestUser();
+    const league = await createTestLeague(owner.id, { sports: ["nfl"] });
+    await createTestLeagueMember(owner.id, league.id, { role: "commissioner" });
+    await createTestLeagueMember(regular.id, league.id, { role: "member" });
+
+    const token = await tokenFor(regular.id);
+    const res = await app.inject({ method: "GET", url: `/leagues/${league.id}/audit-log`, headers: auth(token) });
+
+    expect(res.statusCode).toBe(403);
+  });
+
+  it("paginates", async () => {
+    const owner = await createTestUser();
+    const league = await createTestLeague(owner.id, { sports: ["nfl"] });
+    const member = await createTestLeagueMember(owner.id, league.id, { role: "commissioner" });
+    for (let i = 0; i < 3; i++) {
+      const g = await createTestGame({ homeTeam: `H${i}`, awayTeam: `A${i}`, startsAt: minutesFromNow(60) });
+      await createTestPickAuditLog(member.id, g.id, { selectedTeam: `H${i}` });
+    }
+
+    const token = await tokenFor(owner.id);
+    const page1 = await app.inject({
+      method: "GET",
+      url: `/leagues/${league.id}/audit-log?limit=2`,
+      headers: auth(token),
+    });
+    expect(page1.json().data).toHaveLength(2);
+    expect(page1.json().pagination.next_cursor).not.toBeNull();
+
+    const page2 = await app.inject({
+      method: "GET",
+      url: `/leagues/${league.id}/audit-log?limit=2&cursor=${encodeURIComponent(page1.json().pagination.next_cursor)}`,
+      headers: auth(token),
+    });
+    expect(page2.json().data).toHaveLength(1);
+    expect(page2.json().pagination.next_cursor).toBeNull();
+  });
+
+  it("the DB itself rejects any UPDATE or DELETE against pick_audit_log — never mutated or deleted by application code (JAC-36)", async () => {
+    const owner = await createTestUser();
+    const league = await createTestLeague(owner.id, { sports: ["nfl"] });
+    const member = await createTestLeagueMember(owner.id, league.id, { role: "commissioner" });
+    const g = await createTestGame({ homeTeam: "Bills", awayTeam: "Jets", startsAt: minutesFromNow(60) });
+    const row = await createTestPickAuditLog(member.id, g.id, { selectedTeam: "Bills" });
+
+    // Drizzle wraps the real Postgres error in a generic "Failed query:
+    // ..." message; the actual raised-exception text is on `.cause` —
+    // same fix as game-pick-trigger.test.ts's insertRejectionMessage().
+    async function rejectionMessage(promise: Promise<unknown>): Promise<string> {
+      try {
+        await promise;
+      } catch (err) {
+        const cause = err instanceof Error ? (err.cause ?? err) : err;
+        return String(cause instanceof Error ? cause.message : cause);
+      }
+      throw new Error("expected the query to be rejected, but it succeeded");
+    }
+
+    const updateMessage = await rejectionMessage(
+      db.update(pickAuditLog).set({ selectedTeam: "Jets" }).where(eq(pickAuditLog.id, row.id)),
+    );
+    expect(updateMessage).toMatch(/append-only/);
+
+    const deleteMessage = await rejectionMessage(db.delete(pickAuditLog).where(eq(pickAuditLog.id, row.id)));
+    expect(deleteMessage).toMatch(/append-only/);
+
+    const stillThere = await db.select().from(pickAuditLog).where(eq(pickAuditLog.id, row.id));
+    expect(stillThere).toHaveLength(1);
+    expect(stillThere[0]!.selectedTeam).toBe("Bills");
   });
 });
