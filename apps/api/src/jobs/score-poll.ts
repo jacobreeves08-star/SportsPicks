@@ -1,5 +1,6 @@
 import { pathToFileURL } from "node:url";
 import { captureException, initErrorTracking } from "../lib/error-tracking.js";
+import { env } from "../lib/env.js";
 import { pingHeartbeat } from "../lib/heartbeat.js";
 import { logger } from "../lib/logger.js";
 import { createSportsProvider } from "../lib/sports-provider.js";
@@ -31,11 +32,11 @@ export async function runScorePoll(): Promise<void> {
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   initErrorTracking();
   runScorePoll()
-    .then(() => pingHeartbeat("success"))
+    .then(() => pingHeartbeat(env.HEARTBEAT_URL, "success"))
     .catch(async (err) => {
       logger.error({ job: "score-poll", err }, "score-poll failed");
       captureException(err);
-      await pingHeartbeat("fail");
+      await pingHeartbeat(env.HEARTBEAT_URL, "fail");
       // Set the exit code and let Node exit naturally once the event loop
       // drains, rather than calling process.exit() directly — Pino's
       // stdout writes are async, and a forced exit can cut them off
