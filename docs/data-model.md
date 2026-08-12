@@ -1,6 +1,6 @@
-# Data model (JAC-8)
+# Data model (JAC-8, extended by JAC-13–18)
 
-Source of truth: [`apps/api/src/db/schema.ts`](../apps/api/src/db/schema.ts) (Drizzle) and [`apps/api/src/db/migrations/0001_init.sql`](../apps/api/src/db/migrations/0001_init.sql) (hand-written; see note below on why).
+Source of truth: [`apps/api/src/db/schema.ts`](../apps/api/src/db/schema.ts) (Drizzle) and the migrations in [`apps/api/src/db/migrations/`](../apps/api/src/db/migrations/) (hand-written; see note below on why).
 
 ## Entities
 
@@ -11,7 +11,29 @@ user
   password_hash
   display_name
   timezone            -- IANA name, app-validated
+  pending_email (unique among non-null)  -- awaiting confirmation; email stays valid for login until confirmed
+  email_verified_at
+  avatar_url          -- client-supplied URL, no upload pipeline
+  deletion_requested_at / scheduled_deletion_at / anonymized_at  -- see docs/account-anonymization.md
   created_at / updated_at
+
+session                 -- one row per device/session (JAC-14)
+  id (uuid, pk)
+  user_id -> user.id
+  access_token_hash / refresh_token_hash (sha256, unique)  -- raw tokens never stored
+  access_token_expires_at
+  refresh_token_expires_at  -- sliding: extended on every refresh
+  user_agent / ip_address (nullable, informational)
+  created_at / last_used_at / revoked_at
+
+verification_token       -- single-use, expiring; email verify / email change / password reset (JAC-15)
+  id (uuid, pk)
+  user_id -> user.id
+  purpose  ('email_verify' | 'email_change' | 'password_reset')
+  token_hash (sha256, unique)
+  expires_at
+  consumed_at  -- set on use; makes it single-use
+  created_at
 
 league
   id (uuid, pk)
@@ -69,10 +91,14 @@ result                   -- SEPARATE from game; corrections are UPDATEs
 2. **`game.external_id` (unique, nullable)** — added so the score-poll job can upsert idempotently by provider ID without creating duplicate games on re-poll. Nullable so seed/manually-entered games don't need a fake provider ID.
 3. **A trigger enforces `pick.selected_team` is one of `game.home_team`/`game.away_team`** — a correctness constraint not explicitly requested, but a pick naming a team not in the game would silently corrupt standings. Enforced in the DB rather than only app-side since it's cheap and this is exactly the kind of invariant a migration should protect once and for all.
 4. **No full result-revision history table** — `revision_count` (as you specified) plus `updated_at` is the audit trail. If you want a queryable history of every past `winning_team` value (not just a count), that's an additional `result_revision` table — didn't add it since it wasn't in the entity list and isn't needed until something actually reads history, but flagging it as the natural next step if that need shows up.
+5. **`pending_email` instead of overwriting `email` in place on a change request** — the old, verified email keeps working for login until the new one is confirmed via a `verification_token` (purpose `email_change`). More correct/secure than immediately swapping `email` and re-unverifying it: a change request can't briefly lock someone out or let an attacker who only controls the new inbox take over login before confirmation.
+6. **Anonymized accounts get a deterministic tombstone email (`deleted-<user_id>@tombstone.invalid`), not `null`** — keeps `email`'s existing `NOT NULL UNIQUE` constraint intact rather than loosening it for one code path. See `docs/account-anonymization.md` for the full anonymization spec.
+7. **Issuing a new `verification_token` invalidates the user's prior unconsumed tokens of the same `purpose`** — not explicitly requested, but without it, requesting a second password-reset email leaves two valid reset links outstanding, which is a real (if minor) footgun. Enforced in `lib/verification-tokens.ts`, not the DB, since "delete rows matching a condition" doesn't need a trigger.
+8. **No refresh-token reuse-detection / session-family revocation** — a stolen-and-reused rotated-away refresh token is currently indistinguishable from any other invalid token (both just fail lookup). Detecting reuse specifically (and revoking the whole session family in response) is a real, known hardening step, deliberately deferred — see `docs/adr/0002-auth-session-hashing-email.md`.
 
 ## Migration tooling note
 
-`drizzle-kit generate` (the usual way to produce SQL from the Drizzle schema) requires running Node, which isn't available on this machine right now — so `0001_init.sql` is hand-written to match `schema.ts` rather than tool-generated, and applied by a small custom runner (`apps/api/src/db/migrate.ts`) that tracks applied files in a `schema_migrations` table. Once Node/npm are available, this can be verified with `npm run typecheck` and, after you confirm the model, `npm run db:migrate`.
+`drizzle-kit generate` (the usual way to produce SQL from the Drizzle schema) isn't used — migrations are hand-written to match `schema.ts` rather than tool-generated (this predates Node being installed on the maintainer's machine, and hand-writing turned out to be a fine steady-state choice, not just a workaround — see `0001_init.sql`/`0002_auth.sql`), and applied by a small custom runner (`apps/api/src/db/migrate.ts`) that tracks applied files in a `schema_migrations` table.
 
 ## Seed data (`apps/api/src/db/seed.ts`)
 
