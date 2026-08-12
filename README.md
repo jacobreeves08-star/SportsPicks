@@ -48,6 +48,10 @@ render.yaml           Render service definitions (web, cron, postgres) per envir
 
 Three isolated environments — dev (local, offline), staging, and prod — each with its own database and credentials. See [`docs/environments.md`](docs/environments.md).
 
+## Observability
+
+Structured logs, error tracking, uptime check, and the dedicated background-job-failure alert are documented in [`docs/observability.md`](docs/observability.md).
+
 ## API conventions
 
 Error envelope, pagination, and timestamp format for the (future) HTTP API are documented in [`docs/api-conventions.md`](docs/api-conventions.md).

@@ -58,9 +58,11 @@ async function main() {
 main()
   .then(() => {
     logger.info("all migrations applied");
-    process.exit(0);
   })
   .catch((err) => {
     logger.error({ err }, "migration failed");
-    process.exit(1);
+    // process.exitCode, not process.exit() — Pino's stdout writes are
+    // async, and forcing an immediate exit can cut off this exact log
+    // line before it flushes.
+    process.exitCode = 1;
   });

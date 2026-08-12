@@ -124,8 +124,9 @@ async function main() {
 
 main()
   .then(() => pool.end())
-  .then(() => process.exit(0))
   .catch((err) => {
     logger.error({ err }, "seed failed");
-    return pool.end().finally(() => process.exit(1));
+    // process.exitCode, not process.exit() — see comment in migrate.ts.
+    process.exitCode = 1;
+    return pool.end();
   });

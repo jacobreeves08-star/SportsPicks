@@ -27,6 +27,8 @@ services:
         sync: false
       - key: SPORTS_API_BASE_URL
         sync: false
+      - key: SENTRY_DSN
+        sync: false
     previewsEnabled: true
 
   - type: cron
@@ -51,6 +53,10 @@ services:
         sync: false
       - key: SPORTS_API_BASE_URL
         sync: false
+      - key: SENTRY_DSN
+        sync: false
+      - key: HEARTBEAT_URL
+        sync: false
 
   - type: web
     name: sports-pickem-api-prod
@@ -73,6 +79,8 @@ services:
       - key: SPORTS_API_KEY
         sync: false
       - key: SPORTS_API_BASE_URL
+        sync: false
+      - key: SENTRY_DSN
         sync: false
     previewsEnabled: false
 
@@ -97,6 +105,10 @@ services:
       - key: SPORTS_API_KEY
         sync: false
       - key: SPORTS_API_BASE_URL
+        sync: false
+      - key: SENTRY_DSN
+        sync: false
+      - key: HEARTBEAT_URL
         sync: false
 
 databases:
