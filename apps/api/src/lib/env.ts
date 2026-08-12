@@ -64,6 +64,12 @@ const envSchema = z.object({
   // schedule (daily, not every 5 minutes), so sharing one monitor would
   // make its "did it run on time" signal meaningless for both jobs.
   ANONYMIZATION_HEARTBEAT_URL: optionalUrl(),
+
+  // Leagues and membership (JAC-25-30). Global guardrails, not
+  // per-league commissioner-configurable settings — see
+  // docs/leagues-and-membership.md.
+  MAX_LEAGUE_MEMBERS: z.coerce.number().int().positive().default(100),
+  MAX_LEAGUES_PER_USER: z.coerce.number().int().positive().default(25),
 });
 
 export type Env = z.infer<typeof envSchema>;
