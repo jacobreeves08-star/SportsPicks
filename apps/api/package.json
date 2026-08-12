@@ -7,6 +7,7 @@
     "build": "tsc -p tsconfig.build.json",
     "start": "node dist/server.js",
     "score-poll": "node dist/jobs/score-poll.js",
+    "schedule-ingest": "node dist/jobs/schedule-ingest.js",
     "anonymize-accounts": "node dist/jobs/anonymize-accounts.js",
     "test": "vitest run",
     "lint": "eslint src",
