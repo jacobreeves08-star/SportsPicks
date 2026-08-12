@@ -29,6 +29,34 @@ const envSchema = z.object({
   // at all, which plain error tracking can't detect. Unset -> ping is a
   // no-op (e.g. dev/CI).
   HEARTBEAT_URL: optionalUrl(),
+
+  // Email provider (JAC-15). mock -> zero network calls, logs the link
+  // instead (dev/CI never send real email or need a Resend account).
+  EMAIL_PROVIDER: z.enum(["mock", "resend"]).default("mock"),
+  RESEND_API_KEY: optionalString(),
+  EMAIL_FROM_ADDRESS: optionalString(),
+  // Used to build absolute links in emails (verify/reset links).
+  PUBLIC_API_URL: z.string().url().default("http://localhost:3000"),
+
+  // Auth token lifetimes (JAC-14). Access token short-lived; refresh
+  // token has a SLIDING expiry (extended on every rotation) so an
+  // actively-returning user is never forced to re-authenticate — see
+  // docs/adr/0002-auth-session-hashing-email.md.
+  AUTH_ACCESS_TOKEN_TTL_MINUTES: z.coerce.number().int().positive().default(15),
+  AUTH_REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().positive().default(90),
+
+  // Verification/reset token lifetimes (JAC-15).
+  AUTH_EMAIL_VERIFICATION_TOKEN_TTL_HOURS: z.coerce.number().int().positive().default(24),
+  AUTH_EMAIL_CHANGE_TOKEN_TTL_HOURS: z.coerce.number().int().positive().default(24),
+  AUTH_PASSWORD_RESET_TOKEN_TTL_MINUTES: z.coerce.number().int().positive().default(60),
+
+  // Self-serve deletion grace period (JAC-18) — see docs/account-anonymization.md.
+  ACCOUNT_DELETION_GRACE_PERIOD_DAYS: z.coerce.number().int().positive().default(30),
+
+  // Separate from HEARTBEAT_URL on purpose: this job runs on a different
+  // schedule (daily, not every 5 minutes), so sharing one monitor would
+  // make its "did it run on time" signal meaningless for both jobs.
+  ANONYMIZATION_HEARTBEAT_URL: optionalUrl(),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -41,6 +69,9 @@ function loadEnv(): Env {
   }
   if (parsed.data.SPORTS_API_PROVIDER === "live" && !parsed.data.SPORTS_API_KEY) {
     throw new Error("SPORTS_API_KEY is required when SPORTS_API_PROVIDER=live");
+  }
+  if (parsed.data.EMAIL_PROVIDER === "resend" && (!parsed.data.RESEND_API_KEY || !parsed.data.EMAIL_FROM_ADDRESS)) {
+    throw new Error("RESEND_API_KEY and EMAIL_FROM_ADDRESS are required when EMAIL_PROVIDER=resend");
   }
   return parsed.data;
 }
