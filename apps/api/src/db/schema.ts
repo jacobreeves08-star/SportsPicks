@@ -83,11 +83,62 @@ export const leagueMember = pgTable(
       .references(() => league.id),
     role: text("role").notNull(),
     joinedAt: timestamp("joined_at", { withTimezone: true }).notNull().defaultNow(),
+    // Soft leave/remove (JAC-25-30) — never a DELETE, so historical picks
+    // (which reference this row, not the league directly) stay intact
+    // for standings integrity. "Active member" = leftAt is null,
+    // everywhere. The unique(userId, leagueId) constraint below forces a
+    // rejoin to reactivate THIS row rather than insert a new one, which
+    // is what makes "rejoining restores prior picks" true for free.
+    leftAt: timestamp("left_at", { withTimezone: true }),
   },
   (t) => [
     unique("league_member_user_league_unique").on(t.userId, t.leagueId),
     check("league_member_role_check", sql`${t.role} in ('commissioner', 'member')`),
+    // NOTE: league_member_one_commissioner_per_league (a deferrable
+    // partial EXCLUDE constraint backing the commissioner invariant) is
+    // NOT representable here — drizzle-orm's pg-core has no EXCLUDE
+    // constraint builder. It exists only in 0004_leagues_membership.sql,
+    // same as triggers and other raw-SQL-only constructs elsewhere in
+    // this schema (e.g. set_updated_at, check_pick_selected_team).
   ],
+);
+
+// One invite code per league (one-to-one via the unique on leagueId).
+// Rotation overwrites `code`/resets `usesCount` in place — no history
+// table, see docs/leagues-and-membership.md.
+export const leagueInviteCode = pgTable("league_invite_code", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  leagueId: uuid("league_id")
+    .notNull()
+    .unique()
+    .references(() => league.id),
+  code: text("code").notNull().unique(),
+  maxUses: integer("max_uses"),
+  usesCount: integer("uses_count").notNull().default(0),
+  expiresAt: timestamp("expires_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// Member reporting to the commissioner (JAC-30) — a visible list, no
+// review workflow or notification (Epic 7 doesn't exist yet).
+export const leagueMemberReport = pgTable(
+  "league_member_report",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    leagueId: uuid("league_id")
+      .notNull()
+      .references(() => league.id),
+    reporterLeagueMemberId: uuid("reporter_league_member_id")
+      .notNull()
+      .references(() => leagueMember.id),
+    reportedLeagueMemberId: uuid("reported_league_member_id")
+      .notNull()
+      .references(() => leagueMember.id),
+    reason: text("reason").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("league_member_report_league_id_idx").on(t.leagueId)],
 );
 
 export const game = pgTable(

@@ -1,5 +1,5 @@
 import { db } from "./client.js";
-import { game, jobRun, league, leagueMember, pick, user } from "./schema.js";
+import { game, jobRun, league, leagueInviteCode, leagueMember, leagueMemberReport, pick, user } from "./schema.js";
 
 // .returning() types its result as possibly-empty under
 // noUncheckedIndexedAccess; a single-row insert always returns exactly
@@ -20,7 +20,7 @@ function firstOrThrow<T>(rows: T[]): T {
  */
 export async function truncateAllTables(): Promise<void> {
   await db.execute(
-    `truncate table "user", league, league_member, game, pick, result, session, verification_token, job_run restart identity cascade`,
+    `truncate table "user", league, league_member, league_invite_code, league_member_report, game, pick, result, session, verification_token, job_run restart identity cascade`,
   );
 }
 
@@ -64,6 +64,33 @@ export async function createTestLeagueMember(
   const rows = await db
     .insert(leagueMember)
     .values({ userId, leagueId, role: "member", ...overrides })
+    .returning();
+  return firstOrThrow(rows);
+}
+
+let inviteCodeCounter = 0;
+
+export async function createTestInviteCode(
+  leagueId: string,
+  overrides: Partial<typeof leagueInviteCode.$inferInsert> = {},
+) {
+  inviteCodeCounter += 1;
+  const rows = await db
+    .insert(leagueInviteCode)
+    .values({ leagueId, code: `TESTCODE${inviteCodeCounter}`, ...overrides })
+    .returning();
+  return firstOrThrow(rows);
+}
+
+export async function createTestMemberReport(
+  leagueId: string,
+  reporterLeagueMemberId: string,
+  reportedLeagueMemberId: string,
+  overrides: Partial<typeof leagueMemberReport.$inferInsert> = {},
+) {
+  const rows = await db
+    .insert(leagueMemberReport)
+    .values({ leagueId, reporterLeagueMemberId, reportedLeagueMemberId, reason: "Test report", ...overrides })
     .returning();
   return firstOrThrow(rows);
 }
