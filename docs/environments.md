@@ -5,24 +5,24 @@ Three environments, each with its own database and credentials — never shared.
 ## dev — local, offline
 
 - Runs entirely on your machine: `docker-compose` Postgres (`sports_pickem_dev`, throwaway local credentials in `docker-compose.yml`) + `npm run dev`.
-- `SPORTS_API_PROVIDER=mock` by default (see `.env.example`) — the score-poll job uses `MockSportsProvider`, which returns `[]` and makes **zero** network calls. Nothing in local dev ever touches the paid sports API or burns quota, even if you run the score-poll job manually.
+- `SPORTS_API_PROVIDER=mock` by default (see `.env.example`) — both `schedule-ingest` and `score-poll` use `MockSportsProvider`, which returns canned/empty data and makes **zero** network calls. Nothing in local dev ever touches the real ESPN API, even if you run either job manually.
 - Seeded via `npm run db:seed` — see `apps/api/src/db/seed.ts`. Not connected to Render at all; doesn't appear in `render.yaml`.
 - `EMAIL_PROVIDER=mock` by default (JAC-13-18) — same idea as the sports provider: `MockEmailProvider` logs verification/reset links instead of sending, so local dev needs no Resend account and never sends real email.
 
 ## staging — Render, auto-deploy
 
-- Services: `sports-pickem-api-staging`, `sports-pickem-score-poll-staging`, `sports-pickem-anonymize-staging`, database `sports-pickem-db-staging`.
+- Services: `sports-pickem-api-staging`, `sports-pickem-schedule-ingest-staging`, `sports-pickem-score-poll-staging`, `sports-pickem-anonymize-staging`, database `sports-pickem-db-staging`.
 - Tracks `main`, `autoDeploy: true` — every merge to `main` (once CI passes) deploys here automatically. This is what JAC-9's "auto-deploy on merge to main" refers to.
-- `SPORTS_API_PROVIDER=live`, with its own `SPORTS_API_KEY` (set as a Render secret, not committed — `sync: false` in `render.yaml` means Render won't try to source it from anywhere but its own dashboard). Real integration testing against the real API happens here, not in dev.
+- `SPORTS_API_PROVIDER=live`. Unlike every other external dependency in this app, **ESPN needs no account, API key, or DNS setup at all** — it's a free, unauthenticated, undocumented endpoint (see `docs/adr/0003-sports-data-pipeline.md` for why it was chosen anyway, and the tradeoffs that come with no contract/SLA). `ESPN_API_BASE_URL` (`sync: false`) is present only as an optional override for pointing at a stub if ever needed; unset, the adapter falls back to the real ESPN base URL. Real integration testing against the real API happens here, not in dev.
 - `EMAIL_PROVIDER=resend`, with its own `RESEND_API_KEY`/`EMAIL_FROM_ADDRESS` — see the Resend setup section below.
 - Own isolated Postgres instance — nothing staging writes can affect prod data.
 
 ## prod — Render, manually promoted
 
-- Services: `sports-pickem-api-prod`, `sports-pickem-score-poll-prod`, `sports-pickem-anonymize-prod`, database `sports-pickem-db-prod`.
+- Services: `sports-pickem-api-prod`, `sports-pickem-schedule-ingest-prod`, `sports-pickem-score-poll-prod`, `sports-pickem-anonymize-prod`, database `sports-pickem-db-prod`.
 - Also tracks `main`, but `autoDeploy: false` — a merge to `main` does **not** automatically hit prod. Once staging looks good, promote by triggering a manual deploy of the latest `main` commit from the Render dashboard (or `render deploy` via the CLI/API if you set that up later).
 - This is a deliberate two-stage flow even for a solo maintainer, kept as simple as possible: one branch (trunk-based, per `CONTRIBUTING.md`), no separate `staging` branch to keep in sync — staging and prod both deploy from `main`, just on different triggers.
-- Its own `SPORTS_API_KEY`, `RESEND_API_KEY`, and Postgres instance, fully isolated from staging.
+- Its own `RESEND_API_KEY` and Postgres instance, fully isolated from staging. No sports-API key to isolate — see above.
 
 ## Setting up Resend (staging/prod only — dev needs none of this)
 
@@ -43,7 +43,7 @@ Keeping a long-lived `staging` branch would mean merging/rebasing it against `ma
 ## Setup (once you have a Render account and this repo is on GitHub)
 
 1. Push this repo to GitHub (see `CONTRIBUTING.md` for the `gh repo create` command).
-2. In Render: New → Blueprint → connect the repo → it reads `render.yaml` and creates all six services (two web, four cron) + two databases.
-3. For each of `sports-pickem-api-staging` and `sports-pickem-api-prod` (and their matching score-poll cron jobs), set `SPORTS_API_KEY` and `SPORTS_API_BASE_URL` in the Render dashboard (Environment tab) — these are marked `sync: false` in `render.yaml` specifically so they're never written to the repo.
+2. In Render: New → Blueprint → connect the repo → it reads `render.yaml` and creates all eight services (two web, six cron) + two databases.
+3. No sports-API account or key setup needed — ESPN requires none (see above). If you ever want to point `ESPN_API_BASE_URL` at something other than the real ESPN base URL (e.g. a stub for testing), set it per-service in the Render dashboard (Environment tab); it's `sync: false` in `render.yaml` so it's never written to the repo, but it's optional and unset by default.
 4. Follow the Resend setup steps above for both web services, and set `PUBLIC_API_URL` on both once you know the real deployed URLs.
 5. Confirm `sports-pickem-api-prod`'s auto-deploy is off (Settings → Build & Deploy) before merging anything real.
