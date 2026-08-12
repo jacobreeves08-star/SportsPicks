@@ -14,6 +14,7 @@
     "db:seed": "tsx src/db/seed.ts"
   },
   "dependencies": {
+    "@node-rs/argon2": "^2.0.2",
     "@sentry/node": "^10.70.0",
     "dotenv": "^16.4.5",
     "drizzle-orm": "^0.45.2",
