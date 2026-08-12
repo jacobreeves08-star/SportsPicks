@@ -66,17 +66,46 @@ export async function runScheduleIngest(providerOverride?: SportsProvider): Prom
       postponedGroups.set(`${g.sport}|${date}`, { sport: g.sport, date });
     }
     for (const { sport, date } of postponedGroups.values()) {
-      const recovered = await provider.fetchSchedule({ sport, fromDate: date, toDate: date });
-      for (const entry of recovered) entries.set(entry.externalId, entry);
+      try {
+        const recovered = await provider.fetchSchedule({ sport, fromDate: date, toDate: date });
+        for (const entry of recovered) entries.set(entry.externalId, entry);
+      } catch (err) {
+        // One postponed game's re-fetch failing (e.g. a sport with no
+        // scoreboard for that date range at all) must not block recovery
+        // for every OTHER postponed game — see the per-sport loop below
+        // for the same reasoning, discovered live against real ESPN.
+        logger.warn({ job: "schedule-ingest", sport, date, err }, "postponement re-fetch failed for one sport/date, continuing");
+      }
     }
 
     const fromDate = toYyyyMmDd(addDays(startedAt, -LOOKBACK_DAYS));
     const toDate = toYyyyMmDd(addDays(startedAt, LOOKAHEAD_DAYS));
+    const sports = Object.keys(ESPN_SPORT_SLUGS);
+    let erroredSports = 0;
     // Sequential, not parallel — keeps the adapter's in-run circuit
     // breaker's consecutive-failure count meaningful across the whole run.
-    for (const sport of Object.keys(ESPN_SPORT_SLUGS)) {
-      const schedule = await provider.fetchSchedule({ sport, fromDate, toDate });
-      for (const entry of schedule) entries.set(entry.externalId, entry);
+    for (const sport of sports) {
+      try {
+        const schedule = await provider.fetchSchedule({ sport, fromDate, toDate });
+        for (const entry of schedule) entries.set(entry.externalId, entry);
+      } catch (err) {
+        // Discovered live: ESPN 404s an out-of-season sport's scoreboard
+        // (confirmed for NCAA men's basketball in August) rather than
+        // returning an empty array. One sport failing — off-season 404,
+        // transient outage, whatever — must not fail every OTHER sport's
+        // ingest for this run.
+        erroredSports += 1;
+        logger.warn({ job: "schedule-ingest", sport, err }, "schedule fetch failed for one sport, continuing");
+      }
+    }
+
+    // Distinct from "every sport legitimately returned zero games" (which
+    // the captureMessage alert below covers): if every single fetch
+    // actually THREW, that's a total outage, not a quiet slate, and the
+    // run should be recorded as a genuine failure — matching what a plain
+    // unguarded provider error would have done before per-sport catches.
+    if (erroredSports === sports.length) {
+      throw new Error(`schedule-ingest: all ${sports.length} sports failed to fetch`);
     }
 
     const bySport = new Map<string, CanonicalScheduleEntry[]>();

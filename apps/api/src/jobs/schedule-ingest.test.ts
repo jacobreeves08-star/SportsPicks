@@ -230,7 +230,7 @@ describe("runScheduleIngest — empty-slate alerting", () => {
 });
 
 describe("runScheduleIngest — job_run tracking", () => {
-  it("records a failed run and rethrows when the provider throws", async () => {
+  it("records a failed run and rethrows when every sport's fetch throws (total outage)", async () => {
     const provider: import("../lib/sports-provider.js").SportsProvider = {
       fetchSchedule: async () => {
         throw new Error("ESPN unreachable");
@@ -238,10 +238,49 @@ describe("runScheduleIngest — job_run tracking", () => {
       fetchResults: async () => [],
     };
 
-    await expect(runScheduleIngest(provider)).rejects.toThrow("ESPN unreachable");
+    await expect(runScheduleIngest(provider)).rejects.toThrow("all 8 sports failed to fetch");
 
     const [run] = await db.select().from(jobRun).where(eq(jobRun.jobName, "schedule-ingest"));
     expect(run!.succeeded).toBe(false);
-    expect(run!.errorMessage).toContain("ESPN unreachable");
+  });
+});
+
+describe("runScheduleIngest — one sport failing does not block the others", () => {
+  it("one sport's fetch throwing (e.g. ESPN 404s an out-of-season scoreboard) still ingests every other sport, and the run succeeds", async () => {
+    // Discovered live against the real ESPN API: NCAA men's basketball's
+    // scoreboard 404s in August (out of season) instead of returning [].
+    const provider: import("../lib/sports-provider.js").SportsProvider = {
+      fetchSchedule: async ({ sport }) => {
+        if (sport === "ncaamb") throw new Error("ESPN request failed: 404");
+        return [scheduleEntry({ externalId: `espn-${sport}`, sport })];
+      },
+      fetchResults: async () => [],
+    };
+
+    await runScheduleIngest(provider);
+
+    const nflRow = await db.select().from(game).where(eq(game.externalId, "espn-nfl"));
+    expect(nflRow).toHaveLength(1);
+    const ncaambRow = await db.select().from(game).where(eq(game.externalId, "espn-ncaamb"));
+    expect(ncaambRow).toHaveLength(0);
+
+    const [run] = await db.select().from(jobRun).where(eq(jobRun.jobName, "schedule-ingest"));
+    expect(run!.succeeded).toBe(true);
+    expect(run!.itemCount).toBe(7); // every sport except the one that 404'd
+  });
+
+  it("does not fire the all-sports-zero alert when only some sports errored but others returned real games", async () => {
+    const captureMessageSpy = vi.spyOn(errorTracking, "captureMessage");
+    const provider: import("../lib/sports-provider.js").SportsProvider = {
+      fetchSchedule: async ({ sport }) => {
+        if (sport === "ncaamb") throw new Error("ESPN request failed: 404");
+        return [scheduleEntry({ externalId: `espn-${sport}`, sport })];
+      },
+      fetchResults: async () => [],
+    };
+
+    await runScheduleIngest(provider);
+
+    expect(captureMessageSpy).not.toHaveBeenCalled();
   });
 });
