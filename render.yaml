@@ -1,0 +1,51 @@
+# Render Blueprint — see docs/environments.md (JAC-10) for how this maps
+# across dev/staging/prod. This file defines the staging/prod-style shape;
+# dev runs entirely locally via docker-compose (see README).
+services:
+  - type: web
+    name: sports-pickem-api
+    runtime: node
+    plan: starter
+    buildCommand: npm install && npm run build --workspace apps/api
+    startCommand: npm run start --workspace apps/api
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: sports-pickem-db
+          property: connectionString
+      - key: SPORTS_API_PROVIDER
+        value: live
+      - key: SPORTS_API_KEY
+        sync: false
+      - key: SPORTS_API_BASE_URL
+        sync: false
+    previewsEnabled: true
+
+  - type: cron
+    name: sports-pickem-score-poll
+    runtime: node
+    plan: starter
+    schedule: "*/5 * * * *"
+    buildCommand: npm install && npm run build --workspace apps/api
+    startCommand: npm run score-poll --workspace apps/api
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: sports-pickem-db
+          property: connectionString
+      - key: SPORTS_API_PROVIDER
+        value: live
+      - key: SPORTS_API_KEY
+        sync: false
+      - key: SPORTS_API_BASE_URL
+        sync: false
+
+databases:
+  - name: sports-pickem-db
+    plan: starter
+    postgresMajorVersion: "16"

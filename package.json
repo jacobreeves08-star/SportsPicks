@@ -1,0 +1,23 @@
+{
+  "name": "sports-pickem",
+  "private": true,
+  "engines": {
+    "node": ">=20.18.0"
+  },
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace apps/api",
+    "build": "npm run build --workspace apps/api",
+    "test": "npm run test --workspace apps/api",
+    "lint": "npm run lint --workspace apps/api",
+    "typecheck": "npm run typecheck --workspace apps/api",
+    "db:generate": "npm run db:generate --workspace apps/api",
+    "db:migrate": "npm run db:migrate --workspace apps/api",
+    "db:seed": "npm run db:seed --workspace apps/api"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3"
+  }
+}
