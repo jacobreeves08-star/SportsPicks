@@ -1,0 +1,28 @@
+{
+  "_synthetic": "Hand-authored for a clean, unambiguous state:'in' example — real captures this session happened to land on scheduled/final snapshots only.",
+  "id": "999000004",
+  "uid": "s:40~l:41~e:999000004",
+  "date": "2026-09-17T00:00Z",
+  "name": "Away Team at Home Team",
+  "competitions": [
+    {
+      "id": "999000004",
+      "date": "2026-09-17T00:00Z",
+      "competitors": [
+        { "id": "7", "homeAway": "home", "winner": false, "team": { "id": "7", "displayName": "Home Team" } },
+        { "id": "8", "homeAway": "away", "winner": false, "team": { "id": "8", "displayName": "Away Team" } }
+      ],
+      "status": {
+        "clock": 305,
+        "period": 2,
+        "type": {
+          "id": "2",
+          "name": "STATUS_IN_PROGRESS",
+          "state": "in",
+          "completed": false,
+          "description": "In Progress"
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "id": "401816481",
+  "uid": "s:1~l:10~e:401816481",
+  "date": "2026-08-11T22:40Z",
+  "name": "Cleveland Guardians at Detroit Tigers",
+  "competitions": [
+    {
+      "id": "401816481",
+      "date": "2026-08-11T22:40Z",
+      "competitors": [
+        {
+          "id": "6",
+          "homeAway": "home",
+          "winner": true,
+          "team": {
+            "id": "6",
+            "displayName": "Detroit Tigers"
+          }
+        },
+        {
+          "id": "5",
+          "homeAway": "away",
+          "winner": false,
+          "team": {
+            "id": "5",
+            "displayName": "Cleveland Guardians"
+          }
+        }
+      ],
+      "status": {
+        "clock": 0,
+        "period": 9,
+        "type": {
+          "id": "3",
+          "name": "STATUS_FINAL",
+          "state": "post",
+          "completed": true,
+          "description": "Final"
+        }
+      }
+    }
+  ]
+}

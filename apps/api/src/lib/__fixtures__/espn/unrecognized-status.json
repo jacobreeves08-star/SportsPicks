@@ -1,0 +1,28 @@
+{
+  "_synthetic": "Hand-authored — a made-up status.type.name/state combination that toCanonicalStatus has no mapping for. Proves the fail-safe: log and skip this one event, never crash the whole fetch, never guess at a mapping.",
+  "id": "999000005",
+  "uid": "s:1~l:10~e:999000005",
+  "date": "2026-09-18T00:00Z",
+  "name": "Mystery Team at Home Team",
+  "competitions": [
+    {
+      "id": "999000005",
+      "date": "2026-09-18T00:00Z",
+      "competitors": [
+        { "id": "9", "homeAway": "home", "winner": false, "team": { "id": "9", "displayName": "Home Team" } },
+        { "id": "10", "homeAway": "away", "winner": false, "team": { "id": "10", "displayName": "Mystery Team" } }
+      ],
+      "status": {
+        "clock": 0,
+        "period": 0,
+        "type": {
+          "id": "999",
+          "name": "STATUS_SOMETHING_ESPN_ADDS_LATER",
+          "state": "weird",
+          "completed": false,
+          "description": "Unknown"
+        }
+      }
+    }
+  ]
+}

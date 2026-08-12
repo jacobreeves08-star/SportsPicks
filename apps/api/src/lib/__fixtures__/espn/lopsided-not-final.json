@@ -1,0 +1,28 @@
+{
+  "_synthetic": "Hand-authored, not a live capture — no in-progress blowout happened to be captured live this session. Exists specifically to prove invariant #6: a huge score gap with completed:false must never be treated as final.",
+  "id": "999000001",
+  "uid": "s:20~l:28~e:999000001",
+  "date": "2026-09-14T17:00Z",
+  "name": "Lopsided Team at Blown Out Team",
+  "competitions": [
+    {
+      "id": "999000001",
+      "date": "2026-09-14T17:00Z",
+      "competitors": [
+        { "id": "1", "homeAway": "home", "winner": false, "team": { "id": "1", "displayName": "Blown Out Team" } },
+        { "id": "2", "homeAway": "away", "winner": false, "team": { "id": "2", "displayName": "Lopsided Team" } }
+      ],
+      "status": {
+        "clock": 120,
+        "period": 4,
+        "type": {
+          "id": "2",
+          "name": "STATUS_IN_PROGRESS",
+          "state": "in",
+          "completed": false,
+          "description": "In Progress"
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,41 @@
+{
+  "id": "401816500",
+  "uid": "s:1~l:10~e:401816500",
+  "date": "2026-08-12T17:40Z",
+  "name": "Baltimore Orioles at Minnesota Twins",
+  "competitions": [
+    {
+      "id": "401816500",
+      "date": "2026-08-12T17:40Z",
+      "competitors": [
+        {
+          "id": "9",
+          "homeAway": "home",
+          "team": {
+            "id": "9",
+            "displayName": "Minnesota Twins"
+          }
+        },
+        {
+          "id": "1",
+          "homeAway": "away",
+          "team": {
+            "id": "1",
+            "displayName": "Baltimore Orioles"
+          }
+        }
+      ],
+      "status": {
+        "clock": 0,
+        "period": 1,
+        "type": {
+          "id": "1",
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false,
+          "description": "Scheduled"
+        }
+      }
+    }
+  ]
+}

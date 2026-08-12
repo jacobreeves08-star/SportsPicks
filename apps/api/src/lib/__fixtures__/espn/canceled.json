@@ -1,0 +1,28 @@
+{
+  "_synthetic": "Hand-authored — no cancelled game appeared in any of this session's live captures. STATUS_CANCELED is well-documented ESPN API knowledge, not directly observed.",
+  "id": "999000003",
+  "uid": "s:20~l:28~e:999000003",
+  "date": "2026-09-16T23:00Z",
+  "name": "Withdrawn Team at Home Team",
+  "competitions": [
+    {
+      "id": "999000003",
+      "date": "2026-09-16T23:00Z",
+      "competitors": [
+        { "id": "5", "homeAway": "home", "winner": false, "team": { "id": "5", "displayName": "Home Team" } },
+        { "id": "6", "homeAway": "away", "winner": false, "team": { "id": "6", "displayName": "Withdrawn Team" } }
+      ],
+      "status": {
+        "clock": 0,
+        "period": 0,
+        "type": {
+          "id": "6",
+          "name": "STATUS_CANCELED",
+          "state": "post",
+          "completed": false,
+          "description": "Canceled"
+        }
+      }
+    }
+  ]
+}

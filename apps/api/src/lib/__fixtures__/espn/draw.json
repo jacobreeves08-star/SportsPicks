@@ -1,0 +1,43 @@
+{
+  "id": "740914",
+  "uid": "s:600~l:700~e:740914",
+  "date": "2026-04-12T13:00Z",
+  "name": "Aston Villa at Nottingham Forest",
+  "competitions": [
+    {
+      "id": "740914",
+      "date": "2026-04-12T13:00Z",
+      "competitors": [
+        {
+          "id": "393",
+          "homeAway": "home",
+          "winner": false,
+          "team": {
+            "id": "393",
+            "displayName": "Nottingham Forest"
+          }
+        },
+        {
+          "id": "362",
+          "homeAway": "away",
+          "winner": false,
+          "team": {
+            "id": "362",
+            "displayName": "Aston Villa"
+          }
+        }
+      ],
+      "status": {
+        "clock": 5400,
+        "period": 2,
+        "type": {
+          "id": "28",
+          "name": "STATUS_FULL_TIME",
+          "state": "post",
+          "completed": true,
+          "description": "Full Time"
+        }
+      }
+    }
+  ]
+}

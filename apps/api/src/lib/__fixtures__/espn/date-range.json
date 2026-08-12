@@ -1,0 +1,176 @@
+{
+  "events": [
+    {
+      "id": "401754523",
+      "uid": "s:20~l:23~e:401754523",
+      "date": "2025-09-02T00:00Z",
+      "name": "TCU Horned Frogs at North Carolina Tar Heels",
+      "competitions": [
+        {
+          "id": "401754523",
+          "date": "2025-09-02T00:00Z",
+          "competitors": [
+            {
+              "id": "153",
+              "homeAway": "home",
+              "winner": false,
+              "team": {
+                "id": "153",
+                "displayName": "North Carolina Tar Heels"
+              }
+            },
+            {
+              "id": "2628",
+              "homeAway": "away",
+              "winner": true,
+              "team": {
+                "id": "2628",
+                "displayName": "TCU Horned Frogs"
+              }
+            }
+          ],
+          "status": {
+            "clock": 0,
+            "period": 4,
+            "type": {
+              "id": "3",
+              "name": "STATUS_FINAL",
+              "state": "post",
+              "completed": true,
+              "description": "Final"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "401754528",
+      "uid": "s:20~l:23~e:401754528",
+      "date": "2025-09-05T23:00Z",
+      "name": "James Madison Dukes at Louisville Cardinals",
+      "competitions": [
+        {
+          "id": "401754528",
+          "date": "2025-09-05T23:00Z",
+          "competitors": [
+            {
+              "id": "97",
+              "homeAway": "home",
+              "winner": true,
+              "team": {
+                "id": "97",
+                "displayName": "Louisville Cardinals"
+              }
+            },
+            {
+              "id": "256",
+              "homeAway": "away",
+              "winner": false,
+              "team": {
+                "id": "256",
+                "displayName": "James Madison Dukes"
+              }
+            }
+          ],
+          "status": {
+            "clock": 0,
+            "period": 4,
+            "type": {
+              "id": "3",
+              "name": "STATUS_FINAL",
+              "state": "post",
+              "completed": true,
+              "description": "Final"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "401760363",
+      "uid": "s:20~l:23~e:401760363",
+      "date": "2025-09-06T01:00Z",
+      "name": "Eastern Washington Eagles at Boise State Broncos",
+      "competitions": [
+        {
+          "id": "401760363",
+          "date": "2025-09-06T01:00Z",
+          "competitors": [
+            {
+              "id": "68",
+              "homeAway": "home",
+              "winner": true,
+              "team": {
+                "id": "68",
+                "displayName": "Boise State Broncos"
+              }
+            },
+            {
+              "id": "331",
+              "homeAway": "away",
+              "winner": false,
+              "team": {
+                "id": "331",
+                "displayName": "Eastern Washington Eagles"
+              }
+            }
+          ],
+          "status": {
+            "clock": 0,
+            "period": 4,
+            "type": {
+              "id": "3",
+              "name": "STATUS_FINAL",
+              "state": "post",
+              "completed": true,
+              "description": "Final"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "401752823",
+      "uid": "s:20~l:23~e:401752823",
+      "date": "2025-09-07T00:00Z",
+      "name": "UCLA Bruins at UNLV Rebels",
+      "competitions": [
+        {
+          "id": "401752823",
+          "date": "2025-09-07T00:00Z",
+          "competitors": [
+            {
+              "id": "2439",
+              "homeAway": "home",
+              "winner": true,
+              "team": {
+                "id": "2439",
+                "displayName": "UNLV Rebels"
+              }
+            },
+            {
+              "id": "26",
+              "homeAway": "away",
+              "winner": false,
+              "team": {
+                "id": "26",
+                "displayName": "UCLA Bruins"
+              }
+            }
+          ],
+          "status": {
+            "clock": 0,
+            "period": 4,
+            "type": {
+              "id": "3",
+              "name": "STATUS_FINAL",
+              "state": "post",
+              "completed": true,
+              "description": "Final"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -13,15 +13,19 @@ import { createSportsProvider } from "../lib/sports-provider.js";
  * non-zero on failure. Actual score-ingestion/grading logic is a product
  * feature for a later phase.
  */
+// TRANSITIONAL stub — full rewrite lands in the very next commit (Epic 3
+// step 10: real candidate-game query, exactly-once finalization, result
+// writes). This keeps the build green between the adapter rewrite and
+// that commit rather than leaving the tree broken for two steps.
 export async function runScorePoll(): Promise<void> {
   const startedAt = Date.now();
   logger.info({ job: "score-poll" }, "score-poll started");
 
   const provider = createSportsProvider();
-  const updates = await provider.fetchUpdates();
+  const results = await provider.fetchResults([]);
 
   logger.info(
-    { job: "score-poll", updateCount: updates.length, durationMs: Date.now() - startedAt },
+    { job: "score-poll", updateCount: results.length, durationMs: Date.now() - startedAt },
     "score-poll completed",
   );
 }

@@ -1,0 +1,28 @@
+{
+  "_synthetic": "Hand-authored — no postponed game appeared in any of this session's live captures. STATUS_POSTPONED is well-documented ESPN API knowledge, not directly observed.",
+  "id": "999000002",
+  "uid": "s:1~l:10~e:999000002",
+  "date": "2026-09-15T23:00Z",
+  "name": "Rained Out Team at Home Team",
+  "competitions": [
+    {
+      "id": "999000002",
+      "date": "2026-09-15T23:00Z",
+      "competitors": [
+        { "id": "3", "homeAway": "home", "winner": false, "team": { "id": "3", "displayName": "Home Team" } },
+        { "id": "4", "homeAway": "away", "winner": false, "team": { "id": "4", "displayName": "Rained Out Team" } }
+      ],
+      "status": {
+        "clock": 0,
+        "period": 0,
+        "type": {
+          "id": "5",
+          "name": "STATUS_POSTPONED",
+          "state": "post",
+          "completed": false,
+          "description": "Postponed"
+        }
+      }
+    }
+  ]
+}
