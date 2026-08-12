@@ -22,13 +22,10 @@ class MockSportsProvider implements SportsProvider {
 }
 
 class LiveSportsProvider implements SportsProvider {
-  constructor(
-    private readonly baseUrl: string,
-    private readonly apiKey: string,
-  ) {}
+  constructor(private readonly baseUrl: string) {}
 
   async fetchUpdates(): Promise<GameUpdate[]> {
-    throw new Error("LiveSportsProvider not yet implemented — foundation phase only");
+    throw new Error("LiveSportsProvider not yet implemented — being replaced in Epic 3 (JAC-20)");
   }
 }
 
@@ -36,5 +33,5 @@ export function createSportsProvider(): SportsProvider {
   if (env.SPORTS_API_PROVIDER === "mock") {
     return new MockSportsProvider();
   }
-  return new LiveSportsProvider(env.SPORTS_API_BASE_URL!, env.SPORTS_API_KEY!);
+  return new LiveSportsProvider(env.ESPN_API_BASE_URL ?? "https://site.api.espn.com/apis/site/v2/sports");
 }

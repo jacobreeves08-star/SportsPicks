@@ -17,10 +17,13 @@ const envSchema = z.object({
   PORT: z.coerce.number().int().positive().default(3000),
   DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace"]).default("info"),
+  // Sports data provider (JAC-20). ESPN's site API is free/unauthenticated
+  // (see docs/adr/0003-sports-data-pipeline.md) — no key needed. The base
+  // URL override exists only for pointing tests/local dev at a stub;
+  // unset in every real environment, the adapter falls back to the real
+  // ESPN endpoint.
   SPORTS_API_PROVIDER: z.enum(["mock", "live"]).default("mock"),
-  SPORTS_API_BASE_URL: optionalUrl(),
-  SPORTS_API_KEY: optionalString(),
-  SCORE_POLL_INTERVAL_CRON: z.string().default("*/5 * * * *"),
+  ESPN_API_BASE_URL: optionalUrl(),
   // Error tracking (JAC-11). Unset -> Sentry init is a no-op (e.g. dev).
   SENTRY_DSN: optionalUrl(),
   // Dead-man's-switch URL (e.g. a healthchecks.io check) pinged by the
@@ -29,6 +32,10 @@ const envSchema = z.object({
   // at all, which plain error tracking can't detect. Unset -> ping is a
   // no-op (e.g. dev/CI).
   HEARTBEAT_URL: optionalUrl(),
+  // Separate from HEARTBEAT_URL on purpose (JAC-24): schedule-ingest runs
+  // every 4 hours, not every 5 minutes — sharing one monitor would make
+  // "did it run on time" meaningless for both jobs.
+  SCHEDULE_INGEST_HEARTBEAT_URL: optionalUrl(),
 
   // Email provider (JAC-15). mock -> zero network calls, logs the link
   // instead (dev/CI never send real email or need a Resend account).
@@ -66,9 +73,6 @@ function loadEnv(): Env {
   if (!parsed.success) {
     const issues = parsed.error.issues.map((i) => `  - ${i.path.join(".")}: ${i.message}`).join("\n");
     throw new Error(`Invalid environment configuration:\n${issues}`);
-  }
-  if (parsed.data.SPORTS_API_PROVIDER === "live" && !parsed.data.SPORTS_API_KEY) {
-    throw new Error("SPORTS_API_KEY is required when SPORTS_API_PROVIDER=live");
   }
   if (parsed.data.EMAIL_PROVIDER === "resend" && (!parsed.data.RESEND_API_KEY || !parsed.data.EMAIL_FROM_ADDRESS)) {
     throw new Error("RESEND_API_KEY and EMAIL_FROM_ADDRESS are required when EMAIL_PROVIDER=resend");
