@@ -192,6 +192,33 @@ export const pick = pgTable(
   (t) => [unique("pick_league_member_game_unique").on(t.leagueMemberId, t.gameId)],
 );
 
+// Append-only audit trail of every pick write (JAC-31-36) — never
+// mutated or deleted by application code, backstopped at the DB level
+// by BEFORE UPDATE/DELETE triggers that unconditionally raise (see
+// 0005_picks.sql). This is the record that resolves "I definitely
+// picked them" disputes, so it exists independently of `pick` itself
+// (which only ever holds each member's CURRENT selection per game).
+export const pickAuditLog = pgTable(
+  "pick_audit_log",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    leagueMemberId: uuid("league_member_id")
+      .notNull()
+      .references(() => leagueMember.id),
+    gameId: uuid("game_id")
+      .notNull()
+      .references(() => game.id),
+    selectedTeam: text("selected_team").notNull(),
+    action: text("action").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    check("pick_audit_log_action_check", sql`${t.action} in ('create', 'change')`),
+    index("pick_audit_log_league_member_id_idx").on(t.leagueMemberId),
+    index("pick_audit_log_game_id_idx").on(t.gameId),
+  ],
+);
+
 // One current result per game. Corrections are UPDATEs (winning_team +
 // revision_count via trigger, see migration), never a delete/reinsert —
 // see docs/adr and migration comments for the audit-trail rationale.

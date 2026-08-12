@@ -1,5 +1,15 @@
 import { db } from "./client.js";
-import { game, jobRun, league, leagueInviteCode, leagueMember, leagueMemberReport, pick, user } from "./schema.js";
+import {
+  game,
+  jobRun,
+  league,
+  leagueInviteCode,
+  leagueMember,
+  leagueMemberReport,
+  pick,
+  pickAuditLog,
+  user,
+} from "./schema.js";
 
 // .returning() types its result as possibly-empty under
 // noUncheckedIndexedAccess; a single-row insert always returns exactly
@@ -20,7 +30,7 @@ function firstOrThrow<T>(rows: T[]): T {
  */
 export async function truncateAllTables(): Promise<void> {
   await db.execute(
-    `truncate table "user", league, league_member, league_invite_code, league_member_report, game, pick, result, session, verification_token, job_run restart identity cascade`,
+    `truncate table "user", league, league_member, league_invite_code, league_member_report, game, pick, pick_audit_log, result, session, verification_token, job_run restart identity cascade`,
   );
 }
 
@@ -117,6 +127,18 @@ export async function createTestPick(
   const rows = await db
     .insert(pick)
     .values({ leagueMemberId, gameId, selectedTeam: "Home", ...overrides })
+    .returning();
+  return firstOrThrow(rows);
+}
+
+export async function createTestPickAuditLog(
+  leagueMemberId: string,
+  gameId: string,
+  overrides: Partial<typeof pickAuditLog.$inferInsert> = {},
+) {
+  const rows = await db
+    .insert(pickAuditLog)
+    .values({ leagueMemberId, gameId, selectedTeam: "Home", action: "create", ...overrides })
     .returning();
   return firstOrThrow(rows);
 }
