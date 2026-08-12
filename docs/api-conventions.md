@@ -44,6 +44,17 @@ Codes in use today:
 | `RATE_LIMITED` | 429 | `@fastify/rate-limit` tripped on the signup/login/password-reset-request routes — `toErrorResponse` special-cases its 429 into this code rather than the generic `REQUEST_ERROR` fallback |
 | `REQUEST_ERROR` | 4xx | Generic fallback for a 4xx with no more specific code |
 | `INTERNAL_ERROR` | 500 | Unexpected error; real detail never reaches the client |
+| `INVITE_CODE_NOT_FOUND` | 404 | Invite code doesn't exist (JAC-25-30) |
+| `INVITE_CODE_EXPIRED` | 410 | Invite code existed but is past its `expiresAt` |
+| `INVITE_CODE_MAX_USES_REACHED` | 409 | The code's own `maxUses` is exhausted |
+| `LEAGUE_FULL` | 409 | League at `MAX_LEAGUE_MEMBERS` |
+| `MAX_LEAGUES_REACHED` | 409 | Caller at `MAX_LEAGUES_PER_USER`, on create or join |
+| `SPORTS_SELECTION_FROZEN` | 409 | League already has a graded game; `sports` is immutable |
+| `COMMISSIONER_MUST_TRANSFER_FIRST` | 409 | Sole commissioner tried to leave with other active members present |
+| `SOLE_MEMBER_USE_DELETE` | 409 | Sole commissioner (and only member) tried to leave — delete the league instead |
+| `CANNOT_REMOVE_SELF` | 400 | Commissioner targeted their own membership via remove-member — use leave/transfer/delete |
+
+Offensive league-name rejection reuses `VALIDATION_ERROR` (`fields: [{ field: "name", ... }]`) rather than a bespoke code — same pattern as timezone validation in `users.routes.ts`/`auth.routes.ts`.
 
 ## Authentication
 
@@ -81,6 +92,8 @@ Response:
 `next_cursor` is `null` when there's no next page.
 
 `GET /leagues/:leagueId/picks` (JAC-17) doesn't follow this yet — it returns a bare array. That route exists only to give the authorization layer something real to test over HTTP (see `apps/api/src/routes/leagues.routes.ts`), not as the real picks-list endpoint; the real one, whenever the leagues/picks epic builds it, should follow this convention.
+
+`GET /leagues/:leagueId/members` (JAC-25-30) is this convention's first real consumer. One implementation note worth flagging for the next paginated endpoint: the opaque cursor here encodes `(joinedAt, id)`, and the `WHERE` comparison against it needs `date_trunc('milliseconds', ...)` on **both** the cursor column and the `ORDER BY` — node-postgres's `timestamptz` parser produces a JS `Date` (millisecond resolution), but the column itself is stored with microsecond precision, so comparing the raw column against a millisecond-truncated cursor value lets a boundary row's real sub-millisecond remainder satisfy `>` against its own cursor and reappear on the next page. Caught by an integration test asserting the second page returns exactly the expected remainder, not one more.
 
 ## Timestamps
 

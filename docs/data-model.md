@@ -1,4 +1,4 @@
-# Data model (JAC-8, extended by JAC-13–18, JAC-19–24)
+# Data model (JAC-8, extended by JAC-13–18, JAC-19–24, JAC-25–30)
 
 Source of truth: [`apps/api/src/db/schema.ts`](../apps/api/src/db/schema.ts) (Drizzle) and the migrations in [`apps/api/src/db/migrations/`](../apps/api/src/db/migrations/) (hand-written; see note below on why).
 
@@ -48,9 +48,28 @@ league_member
   id (uuid, pk)
   user_id    -> user.id
   league_id  -> league.id
-  role                  ('commissioner' | 'member')
+  role                  ('commissioner' | 'member') -- kept in sync with league.commissioner_id
+                                                     -- by a trigger, see docs/leagues-and-membership.md
   joined_at
-  UNIQUE (user_id, league_id)
+  left_at (nullable)    -- soft leave/remove (JAC-25-30); "active member" = left_at is null
+  UNIQUE (user_id, league_id)  -- also what makes "rejoin reactivates the same row" work
+
+league_invite_code       -- one row per league (JAC-25-30)
+  id (uuid, pk)
+  league_id (unique) -> league.id
+  code (unique)             -- 8 chars, alphabet excludes 0/O/1/I/L
+  max_uses (nullable)
+  uses_count
+  expires_at (nullable)
+  created_at / updated_at   -- "rotate" overwrites code/resets uses_count on this same row
+
+league_member_report     -- member reporting to the commissioner (JAC-25-30), no review workflow
+  id (uuid, pk)
+  league_id -> league.id
+  reporter_league_member_id -> league_member.id
+  reported_league_member_id -> league_member.id
+  reason
+  created_at
 
 game                     -- GLOBAL, never duplicated per league
   id (uuid, pk)
@@ -101,7 +120,7 @@ job_run                  -- cross-run memory for stateless cron-triggered jobs (
 
 ## Decisions made beyond the literal spec (flagging for your review)
 
-1. **`league_member` has `UNIQUE(user_id, league_id)`** — not explicitly requested, but without it a user could join the same league twice, which would make "compare records against friends" ambiguous. Easy to drop if you want multiple memberships allowed (e.g., re-joining after leaving).
+1. **`league_member` has `UNIQUE(user_id, league_id)`** — not explicitly requested, but without it a user could join the same league twice, which would make "compare records against friends" ambiguous. **Resolved in JAC-25-30, not dropped**: leaving/removal is a soft `left_at` marker rather than a `DELETE`, so this constraint now does double duty — it's exactly what forces a rejoin to reactivate the same row (via `ON CONFLICT DO UPDATE SET left_at = null`) instead of inserting a second one, which is what makes "rejoining restores prior picks" true for free. See `docs/leagues-and-membership.md`.
 2. **`game.external_id` (unique, nullable)** — added so the score-poll job can upsert idempotently by provider ID without creating duplicate games on re-poll. Nullable so seed/manually-entered games don't need a fake provider ID.
 3. **A trigger enforces `pick.selected_team` is one of `game.home_team`/`game.away_team`, or `'DRAW'` when `game.allows_draw`** — a correctness constraint not explicitly requested, but a pick naming a team not in the game would silently corrupt standings. Enforced in the DB rather than only app-side since it's cheap and this is exactly the kind of invariant a migration should protect once and for all. Extended in JAC-19–24 (`check_pick_selected_team`, `0003_sports_pipeline.sql`) to accept the `'DRAW'` sentinel, but only for games where `allows_draw` is true — a `'DRAW'` pick against a non-soccer game is still rejected at the database level.
 4. **No full result-revision history table** — `revision_count` (as you specified) plus `updated_at` is the audit trail. If you want a queryable history of every past `winning_team` value (not just a count), that's an additional `result_revision` table — didn't add it since it wasn't in the entity list and isn't needed until something actually reads history, but flagging it as the natural next step if that need shows up.
@@ -112,6 +131,9 @@ job_run                  -- cross-run memory for stateless cron-triggered jobs (
 9. **`home_team_external_id`/`away_team_external_id`, not a full `team` table (JAC-19–24)** — confirmed with the user directly. Keeps team identity lightweight; the two columns exist purely as a stable join key for `schedule-ingest`'s upsert, so a team's stored display name self-corrects on re-ingest without introducing a normalized entity or touching pick-ownership semantics. See `docs/adr/0003-sports-data-pipeline.md`.
 10. **`'DRAW'` as a literal sentinel string in `pick.selected_team`/`result.winning_team`, not a separate boolean column** — confirmed with the user directly (the alternative considered was voiding draws entirely). Keeps grading uniform (`pick.selected_team === result.winning_team`) with no special-casing for soccer, at the cost of a "magic string" that must never collide with a real team name — mitigated by `allows_draw`'s DB-level gate, which makes `'DRAW'` illegal as a pick value for any non-soccer game.
 11. **`job_run` is append-only, not upserted per job** — one row is written once, at the end of each run (success or caught failure), rather than inserted-at-start and updated-at-end. Simpler, and the full run history is a users-facing debugging aid for free; nothing currently reads more than the latest row or latest successful row (`getJobRunStatus`), but keeping history costs nothing and wasn't worth trading away for a marginally smaller table.
+12. **`league.commissioner_id` stays the single source of truth for the commissioner invariant; `league_member.role` is a trigger-synced denormalized column, backstopped by a deferrable EXCLUDE constraint (JAC-25-30)** — confirmed the design during planning, not something the literal spec asked for at this level of detail. See `docs/leagues-and-membership.md` for the full reasoning, including why a plain unique index couldn't do this job.
+13. **`league_invite_code` is one row per league, not a history table (JAC-25-30)** — "rotatable" is satisfied by overwriting `code` and resetting `uses_count` in place. If a future need arises to audit past codes (e.g., "who joined via which code"), that's a separate `league_invite_code_redemption` table — not built now since nothing asks for that history yet.
+14. **No ban/block-rejoin list (JAC-25-30)** — a member removed by the commissioner can rejoin via the invite code exactly like anyone else; removal stops participation *now*, it isn't a ban. A real moderation/ban feature isn't in the literal spec; `league_member_report` gives the commissioner visibility without building one.
 
 ## Migration tooling note
 

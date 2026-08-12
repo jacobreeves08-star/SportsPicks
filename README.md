@@ -2,7 +2,7 @@
 
 Daily straight-up picks against the spread of nothing — just who wins. Friends compare records inside leagues.
 
-This repo covers foundations (repo, data model, CI, environments, observability, API conventions), authentication & identity (signup/login/sessions, email verification and password reset, profile management, the authorization layer, self-serve deletion), and the sports data pipeline (schedule ingest, score polling, edge-case handling, failure alerting). No league/pick product features yet.
+This repo covers foundations (repo, data model, CI, environments, observability, API conventions), authentication & identity (signup/login/sessions, email verification and password reset, profile management, the authorization layer, self-serve deletion), the sports data pipeline (schedule ingest, score polling, edge-case handling, failure alerting), and leagues & membership (create/join/leave, invite codes, commissioner controls, the multi-league home screen). Full picks/standings UX is still ahead.
 
 ## Stack
 
@@ -69,6 +69,10 @@ Signup, login/sessions, email verification and password reset, profile managemen
 ## Sports data pipeline
 
 Schedule ingest and score polling against the real ESPN API, canonical status/team mapping, exactly-once finalization, and the full postponed/cancelled/suspended/draw edge-case behavior are documented in [`docs/sports-pipeline.md`](docs/sports-pipeline.md) (behavior spec) and [`docs/adr/0003-sports-data-pipeline.md`](docs/adr/0003-sports-data-pipeline.md) (design decisions, including the JAC-19 provider evaluation).
+
+## Leagues & membership
+
+Creating a league, invite codes (generation, rotation, rate-limited redemption), join/leave/rejoin, commissioner controls (transfer, remove a member, delete the league, the sports-selection freeze), and the multi-league home screen's record/rank/unpicked-games computation are documented in [`docs/leagues-and-membership.md`](docs/leagues-and-membership.md).
 
 ## Branching & contributing
 
