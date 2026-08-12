@@ -1,20 +1,25 @@
-# Render Blueprint — see docs/environments.md (JAC-10) for how this maps
-# across dev/staging/prod. This file defines the staging/prod-style shape;
-# dev runs entirely locally via docker-compose (see README).
+# Render Blueprint. Two persistent environments, each with its own
+# database and secrets — staging auto-deploys on every merge to main;
+# prod is promoted manually (redeploy latest main) once staging looks
+# good. Dev is not here at all: it runs entirely locally via
+# docker-compose (see README), with zero dependency on this file or on
+# Render. See docs/environments.md for the full rationale.
 services:
   - type: web
-    name: sports-pickem-api
+    name: sports-pickem-api-staging
     runtime: node
     plan: starter
+    branch: main
+    autoDeploy: true
     buildCommand: npm install && npm run build --workspace apps/api
     startCommand: npm run start --workspace apps/api
     healthCheckPath: /health
     envVars:
       - key: NODE_ENV
-        value: production
+        value: staging
       - key: DATABASE_URL
         fromDatabase:
-          name: sports-pickem-db
+          name: sports-pickem-db-staging
           property: connectionString
       - key: SPORTS_API_PROVIDER
         value: live
@@ -25,9 +30,58 @@ services:
     previewsEnabled: true
 
   - type: cron
-    name: sports-pickem-score-poll
+    name: sports-pickem-score-poll-staging
     runtime: node
     plan: starter
+    branch: main
+    autoDeploy: true
+    schedule: "*/5 * * * *"
+    buildCommand: npm install && npm run build --workspace apps/api
+    startCommand: npm run score-poll --workspace apps/api
+    envVars:
+      - key: NODE_ENV
+        value: staging
+      - key: DATABASE_URL
+        fromDatabase:
+          name: sports-pickem-db-staging
+          property: connectionString
+      - key: SPORTS_API_PROVIDER
+        value: live
+      - key: SPORTS_API_KEY
+        sync: false
+      - key: SPORTS_API_BASE_URL
+        sync: false
+
+  - type: web
+    name: sports-pickem-api-prod
+    runtime: node
+    plan: starter
+    branch: main
+    autoDeploy: false # manual promotion only, after verifying staging
+    buildCommand: npm install && npm run build --workspace apps/api
+    startCommand: npm run start --workspace apps/api
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: sports-pickem-db-prod
+          property: connectionString
+      - key: SPORTS_API_PROVIDER
+        value: live
+      - key: SPORTS_API_KEY
+        sync: false
+      - key: SPORTS_API_BASE_URL
+        sync: false
+    previewsEnabled: false
+
+  - type: cron
+    name: sports-pickem-score-poll-prod
+    runtime: node
+    plan: starter
+    branch: main
+    autoDeploy: false
     schedule: "*/5 * * * *"
     buildCommand: npm install && npm run build --workspace apps/api
     startCommand: npm run score-poll --workspace apps/api
@@ -36,7 +90,7 @@ services:
         value: production
       - key: DATABASE_URL
         fromDatabase:
-          name: sports-pickem-db
+          name: sports-pickem-db-prod
           property: connectionString
       - key: SPORTS_API_PROVIDER
         value: live
@@ -46,6 +100,9 @@ services:
         sync: false
 
 databases:
-  - name: sports-pickem-db
+  - name: sports-pickem-db-staging
+    plan: starter
+    postgresMajorVersion: "16"
+  - name: sports-pickem-db-prod
     plan: starter
     postgresMajorVersion: "16"

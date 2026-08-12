@@ -46,7 +46,11 @@ render.yaml           Render service definitions (web, cron, postgres) per envir
 
 ## Environments
 
-Three isolated environments — dev (local, offline), staging, and prod — each with its own database and credentials. (`docs/environments.md` — landing with JAC-10.)
+Three isolated environments — dev (local, offline), staging, and prod — each with its own database and credentials. See [`docs/environments.md`](docs/environments.md).
+
+## API conventions
+
+Error envelope, pagination, and timestamp format for the (future) HTTP API are documented in [`docs/api-conventions.md`](docs/api-conventions.md).
 
 ## Branching & contributing
 
