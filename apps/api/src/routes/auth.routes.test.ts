@@ -69,6 +69,7 @@ describe("POST /auth/signup", () => {
     }
     expect(results.slice(0, 5).every((r) => r.statusCode !== 429)).toBe(true);
     expect(results[5]!.statusCode).toBe(429);
+    expect(results[5]!.json().error.code).toBe("RATE_LIMITED");
   });
 });
 

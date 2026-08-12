@@ -56,6 +56,17 @@ export function toErrorResponse(err: unknown): { statusCode: number; body: Error
     };
   }
 
+  // @fastify/rate-limit throws a plain Error with statusCode 429 and no
+  // `validation` — give it its own machine-readable code rather than the
+  // generic REQUEST_ERROR fallback, since a client should genuinely
+  // handle "back off and retry" differently from an ordinary 4xx.
+  if (fastifyErr.statusCode === 429) {
+    return {
+      statusCode: 429,
+      body: { error: { code: "RATE_LIMITED", message: err instanceof Error ? err.message : "Rate limited" } },
+    };
+  }
+
   const statusCode =
     fastifyErr.statusCode && fastifyErr.statusCode >= 400 && fastifyErr.statusCode < 500
       ? fastifyErr.statusCode

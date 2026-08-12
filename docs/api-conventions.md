@@ -1,6 +1,6 @@
-# API conventions (JAC-12)
+# API conventions (JAC-12, extended by JAC-13–18)
 
-These apply to every endpoint this API ever grows. No product routes exist yet (foundations phase) — this document and the shared error handler in `apps/api/src/server.ts` are what future routes build on, not aspirational.
+These apply to every endpoint this API ever grows.
 
 ## Error envelope
 
@@ -22,12 +22,36 @@ Every non-2xx response is a single, consistent shape:
 - `message` — a human-readable summary. Safe to show a developer; not guaranteed safe to show an end user verbatim.
 - `fields` — optional, present for validation-style errors: which field(s), and what was wrong with each. Omitted entirely when not applicable (not `null`, not `[]`).
 
-Implementation: `apps/api/src/lib/http-errors.ts` (`ApiError`, `toErrorResponse`), wired into Fastify's `setErrorHandler` in `server.ts`.
+Implementation: `apps/api/src/lib/http-errors.ts` (`ApiError`, `toErrorResponse`), wired into Fastify's `setErrorHandler`/`setNotFoundHandler` in `apps/api/src/app.ts`.
 
 - Throw `new ApiError(code, message, statusCode, fields?)` from a route handler for any expected, client-facing failure (bad input, not found, conflict, etc.).
 - Anything else that reaches the handler (a bug, a DB error, whatever) is treated as unexpected: the client gets a generic `500 INTERNAL_ERROR` with no internal detail, while the real error is logged and sent to error tracking (JAC-11). **Never** let a raw exception message or stack trace reach the client — that's how connection strings and internal paths leak.
 - A Fastify JSON-schema validation failure (`err.validation`) is mapped automatically into the same envelope with `code: "VALIDATION_ERROR"` and one `fields` entry per failed field — route handlers don't need to do this by hand.
 - Unmatched routes return `404 { "error": { "code": "NOT_FOUND", ... } }` via `setNotFoundHandler`, same envelope, no special case.
+
+Codes in use today:
+
+| Code | Status | Meaning |
+|---|---|---|
+| `VALIDATION_ERROR` | 400 | Request body/query/params failed schema or business validation; `fields` present |
+| `UNAUTHENTICATED` | 401 | No/invalid/expired/revoked access token — always this one code regardless of which (JAC-14/17), see Authentication below |
+| `INVALID_CREDENTIALS` | 401 | Login failed — always this one code whether the email doesn't exist or the password is wrong (JAC-14), never distinguished |
+| `INVALID_REFRESH_TOKEN` | 401 | `/auth/refresh` given an invalid, expired, or already-rotated-away token |
+| `CURRENT_PASSWORD_INCORRECT` | 401 | `/users/me/change-password` given the wrong current password |
+| `INVALID_OR_EXPIRED_TOKEN` | 400 | An email-verification/email-change/password-reset link's token is invalid, expired, or already used |
+| `FORBIDDEN` | 403 | Authenticated, but not authorized — failed a membership/ownership/role check (JAC-17) |
+| `NOT_FOUND` | 404 | Unmatched route |
+| `RATE_LIMITED` | 429 | `@fastify/rate-limit` tripped on the signup/login/password-reset-request routes — `toErrorResponse` special-cases its 429 into this code rather than the generic `REQUEST_ERROR` fallback |
+| `REQUEST_ERROR` | 4xx | Generic fallback for a 4xx with no more specific code |
+| `INTERNAL_ERROR` | 500 | Unexpected error; real detail never reaches the client |
+
+## Authentication
+
+Every protected route requires `Authorization: Bearer <accessToken>` (JAC-13-18) — not a cookie, see `docs/adr/0002-auth-session-hashing-email.md` for why. Applied per-route via a preHandler (`apps/api/src/plugins/authenticate.ts`), not a global hook, so it's explicit at each route rather than relying on an exclusion list.
+
+Every reason an access token might not work — missing header, malformed header, unknown token, expired token, revoked token — produces the exact same `401 UNAUTHENTICATED`. This is deliberate: it gives a client exactly one thing to key off of ("not authenticated, go log in"), and it never leaks *why* a token didn't work, which would otherwise let someone probe whether a specific token value ever existed.
+
+**Client contract for session expiry** (documented here, not implemented — there is no frontend in this repo yet): on receiving `401 UNAUTHENTICATED`, a client should first attempt `/auth/refresh` with its stored refresh token; if that also fails, redirect to login with a `?returnTo=<original path>` query param, and after a successful login, navigate back to that path. This keeps "redirect to login and return the user where they were" a client-side navigation concern, consistent with everything else about routing/rendering in this API-only repo.
 
 ## Pagination
 
@@ -55,6 +79,8 @@ Response:
 ```
 
 `next_cursor` is `null` when there's no next page.
+
+`GET /leagues/:leagueId/picks` (JAC-17) doesn't follow this yet — it returns a bare array. That route exists only to give the authorization layer something real to test over HTTP (see `apps/api/src/routes/leagues.routes.ts`), not as the real picks-list endpoint; the real one, whenever the leagues/picks epic builds it, should follow this convention.
 
 ## Timestamps
 

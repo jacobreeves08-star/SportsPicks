@@ -1,5 +1,9 @@
 # Contributing
 
+## Running tests locally
+
+`npm test` requires local Postgres running (`docker compose up -d`, then `npm run db:migrate --workspace apps/api` — see README). Most tests are integration tests against a real database (session lifecycle, authorization checks, full route flows via `app.inject()`), not pure units — this matches what CI's `test` job does against its own throwaway Postgres service container.
+
 ## Branching model — trunk-based
 
 - `main` is the only long-lived branch and is always deployable.

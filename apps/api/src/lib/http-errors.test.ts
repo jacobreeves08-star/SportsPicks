@@ -41,4 +41,13 @@ describe("toErrorResponse", () => {
     expect(statusCode).toBe(422);
     expect(body.error).toEqual({ code: "REQUEST_ERROR", message: "Malformed request" });
   });
+
+  it("gives @fastify/rate-limit's 429 its own RATE_LIMITED code, not the generic REQUEST_ERROR", () => {
+    // @fastify/rate-limit's default errorResponseBuilder throws exactly
+    // this shape: a plain Error with statusCode 429, no `validation`.
+    const err = Object.assign(new Error("Rate limit exceeded, retry in 1 minute"), { statusCode: 429 });
+    const { statusCode, body } = toErrorResponse(err);
+    expect(statusCode).toBe(429);
+    expect(body.error.code).toBe("RATE_LIMITED");
+  });
 });
