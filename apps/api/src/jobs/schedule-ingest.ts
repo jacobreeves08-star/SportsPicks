@@ -10,6 +10,7 @@ import { logger } from "../lib/logger.js";
 import {
   createSportsProvider,
   ESPN_SPORT_SLUGS,
+  toYyyyMmDd,
   type CanonicalScheduleEntry,
   type SportsProvider,
 } from "../lib/sports-provider.js";
@@ -22,10 +23,6 @@ const LOOKBACK_DAYS = 1;
 // NFL flex scheduling can change as late as 6 days out; 14 days gives
 // comfortable margin without being wasteful.
 const LOOKAHEAD_DAYS = 14;
-
-function toYyyyMmDd(date: Date): string {
-  return date.toISOString().slice(0, 10).replace(/-/g, "");
-}
 
 function addDays(date: Date, days: number): Date {
   const d = new Date(date);

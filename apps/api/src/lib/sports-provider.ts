@@ -243,7 +243,10 @@ export class MockSportsProvider implements SportsProvider {
 
 const ESPN_BASE_URL = "https://site.api.espn.com/apis/site/v2/sports";
 
-function toYyyyMmDd(date: Date): string {
+/** YYYYMMDD, the date format ESPN's `dates=` query param expects —
+ * exported since both scheduled jobs need to build FetchSchedule/
+ * FetchResultsParams from a JS Date. */
+export function toYyyyMmDd(date: Date): string {
   return date.toISOString().slice(0, 10).replace(/-/g, "");
 }
 
