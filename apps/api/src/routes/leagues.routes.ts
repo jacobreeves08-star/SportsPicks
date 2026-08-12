@@ -8,6 +8,7 @@ import { env } from "../lib/env.js";
 import { ApiError } from "../lib/http-errors.js";
 import { generateInviteCode, isUniqueConstraintViolation } from "../lib/invite-code.js";
 import { requireLeagueCommissioner, requireLeagueMembership, requireOwnMembership } from "../lib/authorization.js";
+import { rejectionToApiError, writePick } from "../lib/pick-write.js";
 import { ESPN_SPORT_SLUGS } from "../lib/sports-provider.js";
 import { isValidIanaTimeZone, nowUtc } from "../lib/time.js";
 
@@ -351,13 +352,21 @@ export async function leaguesRoutes(app: FastifyInstance): Promise<void> {
       // "write only your own picks" case JAC-17 asks to be tested.
       await requireOwnMembership(request.user!.id, leagueId, memberId);
 
-      const [upserted] = await db
-        .insert(pick)
-        .values({ leagueMemberId: memberId, gameId, selectedTeam })
-        .onConflictDoUpdate({ target: [pick.leagueMemberId, pick.gameId], set: { selectedTeam } })
-        .returning();
+      const [leagueRow] = await db.select({ sports: league.sports }).from(league).where(eq(league.id, leagueId)).limit(1);
 
-      return upserted;
+      const result = await writePick(db, {
+        leagueMemberId: memberId,
+        gameId,
+        selectedTeam,
+        leagueSports: leagueRow!.sports,
+      });
+
+      if (!result.accepted) {
+        const field = result.reason === "INVALID_TEAM_SELECTION" ? "selectedTeam" : "gameId";
+        throw rejectionToApiError(result.reason, result.message, field);
+      }
+
+      return result.pick;
     },
   );
 

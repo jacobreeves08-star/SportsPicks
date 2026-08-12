@@ -1,6 +1,7 @@
 import { eq, sql } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { game } from "../db/schema.js";
+import { ApiError } from "./http-errors.js";
 import { nowUtc } from "./time.js";
 
 export type PickWriteRejectionReason =
@@ -146,4 +147,35 @@ export async function writePick(
       createdAt: row.created_at,
     },
   };
+}
+
+/**
+ * Shared mapping from a rejection reason to the HTTP-facing shape, used
+ * by both the single-pick route (thrown as an ApiError) and the batch
+ * route (embedded per-item, never thrown — see leagues.routes.ts and
+ * docs/picks-and-locking.md). GAME_NOT_FOUND/GAME_NOT_IN_LEAGUE_SPORTS
+ * reuse VALIDATION_ERROR (a malformed/invalid reference, same pattern
+ * as transfer-commissioner's "must be an active member" check);
+ * PICK_LOCKED/GAME_CANCELED/GAME_POSTPONED/INVALID_TEAM_SELECTION each
+ * get their own top-level code — distinct business-rule rejections a
+ * client should branch on differently, not just "bad input."
+ */
+export function rejectionToApiError(
+  reason: PickWriteRejectionReason,
+  message: string,
+  field: "gameId" | "selectedTeam",
+): ApiError {
+  switch (reason) {
+    case "GAME_NOT_FOUND":
+    case "GAME_NOT_IN_LEAGUE_SPORTS":
+      return new ApiError("VALIDATION_ERROR", "Request failed validation", 400, [{ field, message }]);
+    case "INVALID_TEAM_SELECTION":
+      return new ApiError("INVALID_TEAM_SELECTION", message, 400, [{ field, message }]);
+    case "GAME_CANCELED":
+      return new ApiError("GAME_CANCELED", message, 409);
+    case "GAME_POSTPONED":
+      return new ApiError("GAME_POSTPONED", message, 409);
+    case "PICK_LOCKED":
+      return new ApiError("PICK_LOCKED", message, 409);
+  }
 }

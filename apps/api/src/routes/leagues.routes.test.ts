@@ -79,7 +79,11 @@ describe("PUT /leagues/:leagueId/members/:memberId/picks/:gameId — ownership c
     const owner = await createTestUser();
     const league = await createTestLeague(owner.id);
     const member = await createTestLeagueMember(owner.id, league.id, { role: "commissioner" });
-    const game = await createTestGame({ homeTeam: "Chiefs", awayTeam: "Raiders" });
+    // Future startsAt: createTestGame's default (~now) would otherwise
+    // be correctly rejected as locked by JAC-31-36's lock enforcement,
+    // which didn't exist when this ownership-check test was written —
+    // this test is about ownership, not locking.
+    const game = await createTestGame({ homeTeam: "Chiefs", awayTeam: "Raiders", startsAt: new Date(Date.now() + 3600_000) });
 
     const token = await tokenFor(owner.id);
     const res = await app.inject({
@@ -100,7 +104,7 @@ describe("PUT /leagues/:leagueId/members/:memberId/picks/:gameId — ownership c
     const userB = await createTestUser();
     await createTestLeagueMember(userA.id, league.id, { role: "member" });
     const memberB = await createTestLeagueMember(userB.id, league.id, { role: "member" });
-    const game = await createTestGame({ homeTeam: "Packers", awayTeam: "Bears" });
+    const game = await createTestGame({ homeTeam: "Packers", awayTeam: "Bears", startsAt: new Date(Date.now() + 3600_000) });
 
     const tokenA = await tokenFor(userA.id);
     const res = await app.inject({
@@ -112,6 +116,98 @@ describe("PUT /leagues/:leagueId/members/:memberId/picks/:gameId — ownership c
 
     expect(res.statusCode).toBe(403);
     expect(res.json().error.code).toBe("FORBIDDEN");
+  });
+});
+
+/**
+ * JAC-33 (lock enforcement, "the single most important correctness
+ * requirement in the app") — the literal required tests, hitting the
+ * API directly, not calling writePick() as an internal function.
+ */
+describe("PUT /leagues/:leagueId/members/:memberId/picks/:gameId — lock enforcement", () => {
+  it("a pick submitted one second before the game's start is accepted", async () => {
+    const owner = await createTestUser();
+    const league = await createTestLeague(owner.id);
+    const member = await createTestLeagueMember(owner.id, league.id, { role: "commissioner" });
+    const game = await createTestGame({ homeTeam: "Bills", awayTeam: "Jets", startsAt: new Date(Date.now() + 1000) });
+
+    const token = await tokenFor(owner.id);
+    const res = await app.inject({
+      method: "PUT",
+      url: `/leagues/${league.id}/members/${member.id}/picks/${game.id}`,
+      headers: auth(token),
+      payload: { selectedTeam: "Bills" },
+    });
+
+    expect(res.statusCode).toBe(200);
+  });
+
+  it("a pick submitted one second after the game's start is rejected with PICK_LOCKED", async () => {
+    const owner = await createTestUser();
+    const league = await createTestLeague(owner.id);
+    const member = await createTestLeagueMember(owner.id, league.id, { role: "commissioner" });
+    const game = await createTestGame({ homeTeam: "Bills", awayTeam: "Jets", startsAt: new Date(Date.now() - 1000) });
+
+    const token = await tokenFor(owner.id);
+    const res = await app.inject({
+      method: "PUT",
+      url: `/leagues/${league.id}/members/${member.id}/picks/${game.id}`,
+      headers: auth(token),
+      payload: { selectedTeam: "Bills" },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error.code).toBe("PICK_LOCKED");
+
+    const picks = await db.select().from(pick).where(eq(pick.gameId, game.id));
+    expect(picks).toHaveLength(0);
+  });
+
+  it("a game moved EARLIER, then picked after the new (earlier) start time, is rejected — the current start time is always re-read at write time", async () => {
+    const owner = await createTestUser();
+    const league = await createTestLeague(owner.id);
+    const member = await createTestLeagueMember(owner.id, league.id, { role: "commissioner" });
+    // Originally scheduled comfortably in the future...
+    const game = await createTestGame({ homeTeam: "Bills", awayTeam: "Jets", startsAt: new Date(Date.now() + 3600_000) });
+
+    // ...then schedule-ingest (simulated directly here) moves it
+    // earlier, into the past, before the pick is ever attempted.
+    const { game: gameTable } = await import("../db/schema.js");
+    await db.update(gameTable).set({ startsAt: new Date(Date.now() - 1000) }).where(eq(gameTable.id, game.id));
+
+    const token = await tokenFor(owner.id);
+    const res = await app.inject({
+      method: "PUT",
+      url: `/leagues/${league.id}/members/${member.id}/picks/${game.id}`,
+      headers: auth(token),
+      payload: { selectedTeam: "Bills" },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error.code).toBe("PICK_LOCKED");
+  });
+
+  it("rejects a canceled game with GAME_CANCELED, not PICK_LOCKED", async () => {
+    const owner = await createTestUser();
+    const league = await createTestLeague(owner.id);
+    const member = await createTestLeagueMember(owner.id, league.id, { role: "commissioner" });
+    const game = await createTestGame({
+      homeTeam: "Bills",
+      awayTeam: "Jets",
+      startsAt: new Date(Date.now() + 3600_000),
+      status: "canceled",
+    });
+
+    const token = await tokenFor(owner.id);
+    const res = await app.inject({
+      method: "PUT",
+      url: `/leagues/${league.id}/members/${member.id}/picks/${game.id}`,
+      headers: auth(token),
+      payload: { selectedTeam: "Bills" },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error.code).toBe("GAME_CANCELED");
   });
 });
 
