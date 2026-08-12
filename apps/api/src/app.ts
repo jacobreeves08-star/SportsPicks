@@ -7,6 +7,7 @@ import { logger } from "./lib/logger.js";
 import { authRoutes } from "./routes/auth.routes.js";
 import { usersRoutes } from "./routes/users.routes.js";
 import { leaguesRoutes } from "./routes/leagues.routes.js";
+import { leagueInvitesRoutes } from "./routes/league-invites.routes.js";
 import { healthRoutes } from "./routes/health.routes.js";
 
 /**
@@ -53,6 +54,7 @@ export function buildApp() {
   app.register(authRoutes, { prefix: "/auth" });
   app.register(usersRoutes, { prefix: "/users" });
   app.register(leaguesRoutes, { prefix: "/leagues" });
+  app.register(leagueInvitesRoutes, { prefix: "/leagues" });
   app.register(healthRoutes);
 
   return app;
