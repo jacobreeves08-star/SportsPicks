@@ -1,5 +1,5 @@
 import { db } from "./client.js";
-import { game, league, leagueMember, pick, user } from "./schema.js";
+import { game, jobRun, league, leagueMember, pick, user } from "./schema.js";
 
 // .returning() types its result as possibly-empty under
 // noUncheckedIndexedAccess; a single-row insert always returns exactly
@@ -20,7 +20,7 @@ function firstOrThrow<T>(rows: T[]): T {
  */
 export async function truncateAllTables(): Promise<void> {
   await db.execute(
-    `truncate table "user", league, league_member, game, pick, result, session, verification_token restart identity cascade`,
+    `truncate table "user", league, league_member, game, pick, result, session, verification_token, job_run restart identity cascade`,
   );
 }
 
@@ -90,6 +90,22 @@ export async function createTestPick(
   const rows = await db
     .insert(pick)
     .values({ leagueMemberId, gameId, selectedTeam: "Home", ...overrides })
+    .returning();
+  return firstOrThrow(rows);
+}
+
+export async function createTestJobRun(overrides: Partial<typeof jobRun.$inferInsert> = {}) {
+  const now = new Date();
+  const rows = await db
+    .insert(jobRun)
+    .values({
+      jobName: "test-job",
+      startedAt: now,
+      finishedAt: now,
+      succeeded: true,
+      itemCount: 0,
+      ...overrides,
+    })
     .returning();
   return firstOrThrow(rows);
 }

@@ -5,6 +5,7 @@ import {
   timestamp,
   date,
   integer,
+  boolean,
   unique,
   uniqueIndex,
   index,
@@ -99,8 +100,18 @@ export const game = pgTable(
     sport: text("sport").notNull(),
     homeTeam: text("home_team").notNull(),
     awayTeam: text("away_team").notNull(),
+    // Provider's stable per-franchise ID for each side (JAC-20) — kept
+    // alongside the display-name text so re-ingest always corrects a
+    // drifted name via a stable join key, without needing a full team
+    // entity table. Nullable: unset for manually-entered games.
+    homeTeamExternalId: text("home_team_external_id"),
+    awayTeamExternalId: text("away_team_external_id"),
     startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
     status: text("status").notNull().default("scheduled"),
+    // Set by schedule-ingest based on sport (true only for soccer
+    // competitions) — the single source of truth for whether 'DRAW' is
+    // a legal pick.selected_team for this game (see check_pick_selected_team).
+    allowsDraw: boolean("allows_draw").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -109,6 +120,8 @@ export const game = pgTable(
       "game_status_check",
       sql`${t.status} in ('scheduled', 'in_progress', 'final', 'postponed', 'canceled')`,
     ),
+    // Serves score-poll's "started but not final" candidate query.
+    index("game_status_starts_at_idx").on(t.status, t.startsAt),
   ],
 );
 
@@ -196,4 +209,24 @@ export const verificationToken = pgTable(
     ),
     index("verification_token_user_purpose_idx").on(t.userId, t.purpose),
   ],
+);
+
+// Cross-run memory for the schedule-ingest and score-poll cron jobs
+// (JAC-24) — a cron-triggered process is short-lived with no in-memory
+// state between invocations, so "has this job succeeded recently"/"did
+// the last run find anything" need somewhere durable to live. One row
+// per run, written once at the end (not inserted-then-updated).
+export const jobRun = pgTable(
+  "job_run",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    jobName: text("job_name").notNull(),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+    succeeded: boolean("succeeded"),
+    itemCount: integer("item_count"),
+    errorMessage: text("error_message"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("job_run_job_name_started_at_idx").on(t.jobName, t.startedAt)],
 );
