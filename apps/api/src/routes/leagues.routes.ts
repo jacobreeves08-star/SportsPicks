@@ -4,8 +4,10 @@ import { db } from "../db/client.js";
 import { game, league, leagueMember, leagueMemberReport, leagueInviteCode, pick, user } from "../db/schema.js";
 import { authenticate } from "../plugins/authenticate.js";
 import { containsDisallowedContent } from "../lib/content-filter.js";
+import { captureException } from "../lib/error-tracking.js";
 import { env } from "../lib/env.js";
 import { ApiError } from "../lib/http-errors.js";
+import { logger } from "../lib/logger.js";
 import { generateInviteCode, isUniqueConstraintViolation } from "../lib/invite-code.js";
 import { requireLeagueCommissioner, requireLeagueMembership, requireOwnMembership } from "../lib/authorization.js";
 import { rejectionToApiError, writePick } from "../lib/pick-write.js";
@@ -367,6 +369,99 @@ export async function leaguesRoutes(app: FastifyInstance): Promise<void> {
       }
 
       return result.pick;
+    },
+  );
+
+  /**
+   * Batch write a full slate at once (JAC-31-36). Per-game, not
+   * all-or-nothing: one outer transaction so accepted writes become
+   * visible together, but each game's writePick() call runs inside its
+   * OWN nested transaction (a real Postgres SAVEPOINT via Drizzle's
+   * nested db.transaction() support — verified against real Postgres
+   * in Epic 5 step 1) so an unanticipated failure on one game can never
+   * poison the others. writePick() itself doesn't throw for an
+   * ordinary rejection (locked/canceled/etc — that's a normal return
+   * value), so the savepoint is a defensive backstop, not the primary
+   * mechanism; it exists specifically so a bug or a genuine DB-level
+   * exception on game N doesn't roll back games 1..N-1's already-
+   * accepted picks. See docs/picks-and-locking.md.
+   */
+  app.post(
+    "/:leagueId/members/:memberId/picks/batch",
+    {
+      schema: {
+        params: {
+          type: "object",
+          required: ["leagueId", "memberId"],
+          properties: { leagueId: { type: "string" }, memberId: { type: "string" } },
+        },
+        body: {
+          type: "object",
+          required: ["picks"],
+          properties: {
+            picks: {
+              type: "array",
+              minItems: 1,
+              maxItems: 50,
+              items: {
+                type: "object",
+                required: ["gameId", "selectedTeam"],
+                properties: { gameId: { type: "string" }, selectedTeam: { type: "string", minLength: 1 } },
+              },
+            },
+          },
+        },
+      },
+    },
+    async (request) => {
+      const { leagueId, memberId } = request.params as { leagueId: string; memberId: string };
+      const { picks } = request.body as { picks: Array<{ gameId: string; selectedTeam: string }> };
+
+      await requireOwnMembership(request.user!.id, leagueId, memberId);
+
+      const [leagueRow] = await db.select({ sports: league.sports }).from(league).where(eq(league.id, leagueId)).limit(1);
+
+      const results = await db.transaction(async (tx) => {
+        const perGame: Array<{
+          gameId: string;
+          status: "accepted" | "rejected";
+          pick?: { selectedTeam: string };
+          error?: { code: string; message: string };
+        }> = [];
+
+        for (const { gameId, selectedTeam } of picks) {
+          try {
+            const result = await (tx as unknown as typeof db).transaction(async (nestedTx) =>
+              writePick(nestedTx as unknown as typeof db, {
+                leagueMemberId: memberId,
+                gameId,
+                selectedTeam,
+                leagueSports: leagueRow!.sports,
+              }),
+            );
+
+            if (result.accepted) {
+              perGame.push({ gameId, status: "accepted", pick: { selectedTeam: result.pick.selectedTeam } });
+            } else {
+              const field = result.reason === "INVALID_TEAM_SELECTION" ? "selectedTeam" : "gameId";
+              const apiError = rejectionToApiError(result.reason, result.message, field);
+              perGame.push({ gameId, status: "rejected", error: { code: apiError.code, message: apiError.message } });
+            }
+          } catch (err) {
+            // Unanticipated failure for this ONE game — the nested
+            // transaction's savepoint already rolled back just this
+            // game's attempt. Report it and keep going; never let one
+            // game's surprise poison the rest of the batch.
+            logger.error({ leagueId, memberId, gameId, err }, "batch pick write failed unexpectedly for one game");
+            captureException(err);
+            perGame.push({ gameId, status: "rejected", error: { code: "INTERNAL_ERROR", message: "Unexpected error" } });
+          }
+        }
+
+        return perGame;
+      });
+
+      return { results };
     },
   );
 
