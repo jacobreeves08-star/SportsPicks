@@ -43,6 +43,19 @@ describe("requireLeagueMembership", () => {
 
     await expect(requireLeagueMembership(outsider.id, league.id)).rejects.toBeInstanceOf(ApiError);
   });
+
+  it("throws 403 FORBIDDEN for a member who has left (leftAt is set) — a stale session must not still pass", async () => {
+    const owner = await createTestUser();
+    const league = await createTestLeague(owner.id);
+    await createTestLeagueMember(owner.id, league.id, { role: "commissioner" });
+    const departed = await createTestUser();
+    await createTestLeagueMember(departed.id, league.id, { leftAt: new Date() });
+
+    await expect(requireLeagueMembership(departed.id, league.id)).rejects.toMatchObject({
+      code: "FORBIDDEN",
+      statusCode: 403,
+    } satisfies Partial<ApiError>);
+  });
 });
 
 describe("requireLeagueCommissioner", () => {

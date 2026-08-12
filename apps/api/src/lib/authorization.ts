@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { leagueMember } from "../db/schema.js";
 import { ApiError } from "./http-errors.js";
@@ -14,7 +14,9 @@ export async function requireLeagueMembership(userId: string, leagueId: string) 
   const [member] = await db
     .select()
     .from(leagueMember)
-    .where(and(eq(leagueMember.userId, userId), eq(leagueMember.leagueId, leagueId)))
+    .where(
+      and(eq(leagueMember.userId, userId), eq(leagueMember.leagueId, leagueId), isNull(leagueMember.leftAt)),
+    )
     .limit(1);
 
   if (!member) {
