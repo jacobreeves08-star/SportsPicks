@@ -3,7 +3,7 @@ import { findStaleGames } from "../lib/game-staleness.js";
 import { getJobRunStatus } from "../lib/job-run.js";
 import { nowUtc } from "../lib/time.js";
 
-const TRACKED_JOBS = ["schedule-ingest", "score-poll"] as const;
+const TRACKED_JOBS = ["schedule-ingest", "score-poll", "anonymize-accounts"] as const;
 
 /**
  * Documented (not yet consumed — no frontend exists in this repo) hook

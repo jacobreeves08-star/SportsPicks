@@ -34,13 +34,14 @@ A daily cron job (`apps/api/src/jobs/anonymize-accounts.ts`, scheduled `0 3 * * 
 | `pending_email` | `null` (any in-flight email change is abandoned) |
 | `anonymized_at` | Set to the current time — this is the permanent, idempotency-guaranteeing marker that this account has been processed. |
 
-Also **deleted outright** (not anonymized, actually removed): every `session` row and every `verification_token` row belonging to the user. There is nothing identifying or sensitive in those rows worth preserving, and they have no bearing on historical standings.
+Also **deleted outright** (not anonymized, actually removed): every `session` row, every `verification_token` row, and every `push_token` row belonging to the user (JAC-43-48). None of these are historical records — they're device/channel state tied to an active account — and none have any bearing on historical standings.
 
 ### Explicitly preserved, never touched by this process
 
 - The `user` row itself continues to exist (with the scrubbed fields above).
 - Every `league_member` row — the user's league memberships, roles, and join dates stay exactly as they were.
 - Every `pick` row — every pick they ever made stays attached to their (now-anonymized) `league_member` row, so past standings, win/loss records, and head-to-head history for every league they were in remain fully intact and correct.
+- Every `notification_log` row (JAC-43-48) — a `(notification_type, league_member_id, notification_date)` idempotency marker with no personal data (no email, no message content), so there's nothing to scrub. It stays attached to the same `league_member` row picks do.
 
 ## Idempotency and failure handling
 

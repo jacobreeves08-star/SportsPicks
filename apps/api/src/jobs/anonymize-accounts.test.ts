@@ -1,8 +1,15 @@
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "../db/client.js";
-import { leagueMember, session, user, verificationToken } from "../db/schema.js";
-import { createTestLeague, createTestLeagueMember, createTestUser, truncateAllTables } from "../db/test-helpers.js";
+import { jobRun, leagueMember, pushToken, session, user, verificationToken } from "../db/schema.js";
+import {
+  createTestLeague,
+  createTestLeagueMember,
+  createTestPushToken,
+  createTestUser,
+  truncateAllTables,
+} from "../db/test-helpers.js";
+import { getJobRunStatus } from "../lib/job-run.js";
 import { createSession } from "../lib/session.js";
 import { nowUtc } from "../lib/time.js";
 import { issueVerificationToken } from "../lib/verification-tokens.js";
@@ -93,5 +100,35 @@ describe("runAnonymizeAccounts", () => {
     const [secondPass] = await db.select().from(user).where(eq(user.id, testUser.id)).limit(1);
 
     expect(secondPass!.anonymizedAt).toEqual(firstPass!.anonymizedAt);
+  });
+
+  it("hard-deletes push tokens for an anonymized account (JAC-43-48)", async () => {
+    const testUser = await createTestUser();
+    await createTestPushToken(testUser.id);
+    await markDue(testUser.id);
+
+    await runAnonymizeAccounts();
+
+    const tokens = await db.select().from(pushToken).where(eq(pushToken.userId, testUser.id));
+    expect(tokens).toHaveLength(0);
+  });
+
+  it("records a job_run so it's visible to /health/data-freshness (JAC-43-48 gap fix)", async () => {
+    const testUser = await createTestUser();
+    await markDue(testUser.id);
+
+    await runAnonymizeAccounts();
+
+    const status = await getJobRunStatus("anonymize-accounts");
+    expect(status.lastRunAt).not.toBeNull();
+    expect(status.lastRunSucceeded).toBe(true);
+
+    const [run] = await db
+      .select()
+      .from(jobRun)
+      .where(eq(jobRun.jobName, "anonymize-accounts"))
+      .orderBy(jobRun.startedAt)
+      .limit(1);
+    expect(run!.itemCount).toBe(1);
   });
 });

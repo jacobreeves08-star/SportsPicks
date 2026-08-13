@@ -1,10 +1,11 @@
 import { pathToFileURL } from "node:url";
 import { and, eq, isNull, lte } from "drizzle-orm";
 import { db } from "../db/client.js";
-import { session, user, verificationToken } from "../db/schema.js";
+import { pushToken, session, user, verificationToken } from "../db/schema.js";
 import { captureException, initErrorTracking } from "../lib/error-tracking.js";
 import { env } from "../lib/env.js";
 import { pingHeartbeat } from "../lib/heartbeat.js";
+import { recordJobRun } from "../lib/job-run.js";
 import { logger } from "../lib/logger.js";
 import { hashPassword } from "../lib/password.js";
 import { generateOpaqueToken } from "../lib/tokens.js";
@@ -16,57 +17,87 @@ import { nowUtc } from "../lib/time.js";
  * spec this implements. Structurally mirrors score-poll.ts (same
  * entrypoint guard, error tracking, dedicated heartbeat, exit-code
  * handling — see the comments there for why each piece is built the
- * way it is).
+ * way it is). Previously missing `recordJobRun` entirely (JAC-43-48
+ * gap fix) — the one existing job that was invisible to
+ * `/health/data-freshness` and to the operator digest.
  *
  * Finds every user past their deletion grace period and not yet
  * anonymized, and for each: scrubs personal fields (email, password,
  * display name, avatar, any pending email change) to a permanent
- * tombstone, and deletes their sessions/verification tokens. The user
- * row itself, and their league_member/pick rows, are never touched —
- * anonymization is the whole point, not deletion — so historical
- * standings and picks still reconcile for everyone else in their leagues.
+ * tombstone, and deletes their sessions/verification tokens/push
+ * tokens. The user row itself, and their league_member/pick rows, are
+ * never touched — anonymization is the whole point, not deletion — so
+ * historical standings and picks still reconcile for everyone else in
+ * their leagues.
  */
 export async function runAnonymizeAccounts(): Promise<void> {
-  const startedAt = Date.now();
+  const startedAt = new Date();
   logger.info({ job: "anonymize-accounts" }, "anonymize-accounts started");
 
-  const now = nowUtc().toJSDate();
-  const due = await db
-    .select({ id: user.id })
-    .from(user)
-    .where(and(lte(user.scheduledDeletionAt, now), isNull(user.anonymizedAt)));
+  try {
+    const now = nowUtc().toJSDate();
+    const due = await db
+      .select({ id: user.id })
+      .from(user)
+      .where(and(lte(user.scheduledDeletionAt, now), isNull(user.anonymizedAt)));
 
-  let anonymizedCount = 0;
+    let anonymizedCount = 0;
 
-  for (const { id: userId } of due) {
-    // One transaction per user, same resilience posture as migrate.ts —
-    // one bad row shouldn't block the rest of the batch.
-    await db.transaction(async (tx) => {
-      const unusablePasswordHash = await hashPassword(generateOpaqueToken());
+    for (const { id: userId } of due) {
+      // One transaction per user, same resilience posture as migrate.ts —
+      // one bad row shouldn't block the rest of the batch.
+      await db.transaction(async (tx) => {
+        const unusablePasswordHash = await hashPassword(generateOpaqueToken());
 
-      await tx
-        .update(user)
-        .set({
-          email: `deleted-${userId}@tombstone.invalid`,
-          passwordHash: unusablePasswordHash,
-          displayName: "Deleted User",
-          avatarUrl: null,
-          pendingEmail: null,
-          anonymizedAt: nowUtc().toJSDate(),
-        })
-        .where(eq(user.id, userId));
+        await tx
+          .update(user)
+          .set({
+            email: `deleted-${userId}@tombstone.invalid`,
+            passwordHash: unusablePasswordHash,
+            displayName: "Deleted User",
+            avatarUrl: null,
+            pendingEmail: null,
+            anonymizedAt: nowUtc().toJSDate(),
+          })
+          .where(eq(user.id, userId));
 
-      await tx.delete(session).where(eq(session.userId, userId));
-      await tx.delete(verificationToken).where(eq(verificationToken.userId, userId));
+        await tx.delete(session).where(eq(session.userId, userId));
+        await tx.delete(verificationToken).where(eq(verificationToken.userId, userId));
+        // A push token is exactly the category of thing session/
+        // verification_token already are: device/channel state tied to
+        // an account that's being deleted, not a historical record —
+        // hard-deleted outright, not anonymized. See docs/notifications.md.
+        await tx.delete(pushToken).where(eq(pushToken.userId, userId));
+      });
+
+      anonymizedCount += 1;
+    }
+
+    const finishedAt = new Date();
+    await recordJobRun({
+      jobName: "anonymize-accounts",
+      startedAt,
+      finishedAt,
+      succeeded: true,
+      itemCount: anonymizedCount,
+      errorMessage: null,
     });
 
-    anonymizedCount += 1;
+    logger.info(
+      { job: "anonymize-accounts", anonymizedCount, durationMs: finishedAt.getTime() - startedAt.getTime() },
+      "anonymize-accounts completed",
+    );
+  } catch (err) {
+    await recordJobRun({
+      jobName: "anonymize-accounts",
+      startedAt,
+      finishedAt: new Date(),
+      succeeded: false,
+      itemCount: null,
+      errorMessage: err instanceof Error ? err.message : String(err),
+    });
+    throw err;
   }
-
-  logger.info(
-    { job: "anonymize-accounts", anonymizedCount, durationMs: Date.now() - startedAt },
-    "anonymize-accounts completed",
-  );
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
