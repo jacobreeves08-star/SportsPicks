@@ -10,6 +10,23 @@ describe("createEmailProvider", () => {
     ).resolves.toBeUndefined();
     await expect(provider.sendPasswordResetEmail("a@example.com", "https://x/reset")).resolves.toBeUndefined();
     await expect(provider.sendDuplicateSignupNotice("a@example.com")).resolves.toBeUndefined();
+    await expect(
+      provider.sendPickReminderEmail("a@example.com", {
+        leagueName: "Test League",
+        unpickedGames: [{ homeTeam: "Bills", awayTeam: "Jets", startsAt: new Date() }],
+        firstLockAt: new Date(),
+        timezone: "America/Chicago",
+      }),
+    ).resolves.toBeUndefined();
+    await expect(
+      provider.sendResultsSummaryEmail("a@example.com", {
+        leagueName: "Test League",
+        wins: 2,
+        losses: 1,
+        rank: 1,
+        rankChange: 1,
+      }),
+    ).resolves.toBeUndefined();
   });
 
   it("mock and resend providers are distinct implementations", () => {
