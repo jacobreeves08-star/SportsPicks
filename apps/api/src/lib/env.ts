@@ -44,6 +44,15 @@ const envSchema = z.object({
   EMAIL_FROM_ADDRESS: optionalString(),
   // Used to build absolute links in emails (verify/reset links).
   PUBLIC_API_URL: z.string().url().default("http://localhost:3000"),
+  // The client's own origin (Epic 8) — CORS (app.ts) allows exactly
+  // this one origin, not a wildcard. Bearer-token auth (ADR 0002)
+  // means no cookies ever cross this boundary, so `credentials` stays
+  // false; this is purely what lets a real browser's CORS preflight
+  // succeed for a client running on a different origin than the API.
+  // Defaults to apps/client's own local-dev Vite port
+  // (apps/client/src/api/config.ts's matching default), so the two
+  // apps talk to each other with zero config out of the box.
+  PUBLIC_CLIENT_URL: z.string().url().default("http://localhost:5173"),
 
   // Auth token lifetimes (JAC-14). Access token short-lived; refresh
   // token has a SLIDING expiry (extended on every rotation) so an

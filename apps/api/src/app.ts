@@ -1,7 +1,9 @@
 import { randomUUID } from "node:crypto";
 import Fastify from "fastify";
+import cors from "@fastify/cors";
 import rateLimit from "@fastify/rate-limit";
 import { captureException } from "./lib/error-tracking.js";
+import { env } from "./lib/env.js";
 import { toErrorResponse } from "./lib/http-errors.js";
 import { logger } from "./lib/logger.js";
 import { rateLimitErrorResponseBuilder } from "./lib/rate-limit.js";
@@ -29,6 +31,39 @@ export function buildApp() {
   });
 
   app.decorateRequest("user", null);
+
+  // CORS (Epic 8: client infrastructure). Discovered empirically, not
+  // guessed at in advance: without this, a real browser's preflight
+  // OPTIONS request for ANY cross-origin call (the client runs on a
+  // different origin/port than this API in every environment) hits
+  // this app's own 404 handler — no OPTIONS route is registered for
+  // any path — and the browser blocks the real request entirely
+  // before it ever reaches a route handler. Registered FIRST, before
+  // every other hook/route, so its own preflight handling always runs
+  // ahead of anything else. Exactly one allowed origin (never `*`) —
+  // `credentials: false` because auth here is Bearer-token-only (ADR
+  // 0002), never cookies, so there's nothing credentialed to allow
+  // cross-origin in the first place. `X-Server-Time` (below) MUST be
+  // explicitly exposed — a custom response header is invisible to
+  // browser JS on a cross-origin response unless CORS says otherwise,
+  // confirmed empirically (client's `response.headers.get(...)` read
+  // `null` for it before this was added, silently breaking the whole
+  // clock-sync module despite the header genuinely being sent).
+  app.register(cors, {
+    origin: env.PUBLIC_CLIENT_URL,
+    credentials: false,
+    exposedHeaders: ["X-Server-Time"],
+    // @fastify/cors's own DEFAULT `methods` list is GET/HEAD/POST only
+    // — confirmed empirically against a real preflight response, which
+    // is exactly why pick writes (PUT), profile/league updates
+    // (PATCH), and league/member deletion (DELETE) all failed with an
+    // opaque browser-level "Failed to fetch" despite the SAME request
+    // succeeding perfectly over curl (curl never performs a CORS
+    // preflight at all, which is what made this invisible until
+    // actually tested in a real browser). Every HTTP method any route
+    // in this app uses must be listed explicitly.
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
+  });
 
   // Server-time signal for clients (JAC-49+: client infrastructure).
   // Lock enforcement is entirely server-side (docs/picks-and-locking.md),
