@@ -188,8 +188,23 @@ export const pick = pgTable(
       .references(() => game.id),
     selectedTeam: text("selected_team").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    // Graded outcome (JAC-37-42), written once at grade time by
+    // lib/grading.ts — standings read this directly, never re-deriving
+    // it from `result` on every read. Null until graded. 'void' for a
+    // postponed/cancelled game: never counted as a loss.
+    outcome: text("outcome"),
+    gradedAt: timestamp("graded_at", { withTimezone: true }),
   },
-  (t) => [unique("pick_league_member_game_unique").on(t.leagueMemberId, t.gameId)],
+  (t) => [
+    unique("pick_league_member_game_unique").on(t.leagueMemberId, t.gameId),
+    check("pick_outcome_check", sql`${t.outcome} in ('win', 'loss', 'void')`),
+    // Serves both grading writes (idempotent via this same predicate)
+    // and the reconciliation sweep in score-poll.ts — see
+    // 0006_scoring.sql's comment.
+    index("pick_ungraded_idx")
+      .on(t.gameId)
+      .where(sql`${t.outcome} is null`),
+  ],
 );
 
 // Append-only audit trail of every pick write (JAC-31-36) — never
@@ -234,6 +249,38 @@ export const result = pgTable("result", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+// "Notify affected members that their record changed and why" (JAC-40)
+// — no notification DELIVERY system exists yet (Epic 7), so this is a
+// documented, queryable record (same pattern as league_member_report):
+// the correction endpoint's response includes affected members
+// directly, and this table keeps the history visible to any member
+// afterward, not just the commissioner who triggered a manual one.
+export const resultCorrection = pgTable(
+  "result_correction",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    gameId: uuid("game_id")
+      .notNull()
+      .references(() => game.id),
+    oldWinningTeam: text("old_winning_team").notNull(),
+    newWinningTeam: text("new_winning_team").notNull(),
+    source: text("source").notNull(),
+    // Both null for an automatic provider-revision correction; set for
+    // a manual one — game/result are global (shared across every
+    // league covering that sport), so a manual correction from one
+    // league's commissioner can affect other leagues too. This is what
+    // makes that fully attributed rather than anonymous.
+    correctedByUserId: uuid("corrected_by_user_id").references(() => user.id),
+    correctedFromLeagueId: uuid("corrected_from_league_id").references(() => league.id),
+    reason: text("reason"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    check("result_correction_source_check", sql`${t.source} in ('provider_revision', 'manual')`),
+    index("result_correction_game_id_idx").on(t.gameId),
+  ],
+);
 
 // One row per device/session. Refresh rotates both tokens in place
 // (overwrites the hashes + extends refreshTokenExpiresAt) rather than

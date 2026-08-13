@@ -8,6 +8,7 @@ import {
   leagueMemberReport,
   pick,
   pickAuditLog,
+  resultCorrection,
   user,
 } from "./schema.js";
 
@@ -30,7 +31,7 @@ function firstOrThrow<T>(rows: T[]): T {
  */
 export async function truncateAllTables(): Promise<void> {
   await db.execute(
-    `truncate table "user", league, league_member, league_invite_code, league_member_report, game, pick, pick_audit_log, result, session, verification_token, job_run restart identity cascade`,
+    `truncate table "user", league, league_member, league_invite_code, league_member_report, game, pick, pick_audit_log, result, result_correction, session, verification_token, job_run restart identity cascade`,
   );
 }
 
@@ -139,6 +140,17 @@ export async function createTestPickAuditLog(
   const rows = await db
     .insert(pickAuditLog)
     .values({ leagueMemberId, gameId, selectedTeam: "Home", action: "create", ...overrides })
+    .returning();
+  return firstOrThrow(rows);
+}
+
+export async function createTestResultCorrection(
+  gameId: string,
+  overrides: Partial<typeof resultCorrection.$inferInsert> = {},
+) {
+  const rows = await db
+    .insert(resultCorrection)
+    .values({ gameId, oldWinningTeam: "Home", newWinningTeam: "Away", source: "manual", ...overrides })
     .returning();
   return firstOrThrow(rows);
 }
