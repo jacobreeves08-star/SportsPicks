@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dayBoundsUtc, isValidIanaTimeZone, parseIsoUtc, toUtcIso, toZonedDisplay } from "./time.js";
+import { dayBoundsUtc, isValidIanaTimeZone, parseIsoUtc, toUtcIso, toZonedDisplay, weekBoundsUtc } from "./time.js";
 
 describe("time helpers", () => {
   it("round-trips an ISO UTC timestamp", () => {
@@ -47,6 +47,38 @@ describe("time helpers", () => {
 
     it("throws for an invalid timezone", () => {
       expect(() => dayBoundsUtc("2026-01-15", "Not/AZone")).toThrow(/Invalid date/);
+    });
+  });
+
+  // 2026-01-15 is a Thursday; 2026-01-13 the preceding Tuesday;
+  // 2026-01-12 the preceding Monday (last day of the PRIOR week).
+  describe("weekBoundsUtc (Tuesday-to-Monday, JAC-37-42)", () => {
+    it("a mid-week date resolves to that week's Tuesday-Monday span", () => {
+      const { start, end } = weekBoundsUtc("2026-01-15", "America/Chicago");
+      expect(start.toISOString()).toBe("2026-01-13T06:00:00.000Z"); // Tue 2026-01-13 00:00 CST
+      expect(end.toISOString()).toBe("2026-01-20T06:00:00.000Z"); // Tue 2026-01-20 00:00 CST
+    });
+
+    it("Tuesday itself is the first day of its own week", () => {
+      const { start, end } = weekBoundsUtc("2026-01-13", "America/Chicago");
+      expect(start.toISOString()).toBe("2026-01-13T06:00:00.000Z");
+      expect(end.toISOString()).toBe("2026-01-20T06:00:00.000Z");
+    });
+
+    it("Monday is the LAST day of its week, not the first of the next", () => {
+      const { start, end } = weekBoundsUtc("2026-01-12", "America/Chicago");
+      expect(start.toISOString()).toBe("2026-01-06T06:00:00.000Z"); // Tue 2026-01-06 00:00 CST
+      expect(end.toISOString()).toBe("2026-01-13T06:00:00.000Z"); // exclusive — next Tuesday
+    });
+
+    it("computes week bounds for a timezone ahead of UTC (Asia/Tokyo)", () => {
+      const { start, end } = weekBoundsUtc("2026-01-15", "Asia/Tokyo");
+      expect(start.toISOString()).toBe("2026-01-12T15:00:00.000Z"); // Tue 2026-01-13 00:00 JST
+      expect(end.toISOString()).toBe("2026-01-19T15:00:00.000Z"); // Tue 2026-01-20 00:00 JST
+    });
+
+    it("throws for an invalid timezone", () => {
+      expect(() => weekBoundsUtc("2026-01-15", "Not/AZone")).toThrow(/Invalid date/);
     });
   });
 });

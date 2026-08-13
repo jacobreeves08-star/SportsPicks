@@ -44,3 +44,25 @@ export function dayBoundsUtc(date: string, ianaTimeZone: string): { start: Date;
   }
   return { start: startOfDay.toUTC().toJSDate(), end: startOfDay.plus({ days: 1 }).toUTC().toJSDate() };
 }
+
+/**
+ * The UTC instant range for one Tuesday-to-Monday "week" (JAC-37-42), in
+ * a given IANA timezone — a fixed rule applied to every league, not a
+ * per-league setting, chosen so an NFL slate's Thursday/Sunday/Monday
+ * games always land in the same week. See docs/scoring-and-standings.md
+ * for the reasoning. `end` is exclusive (the start of the following
+ * Tuesday).
+ *
+ * Luxon weekdays run Monday=1..Sunday=7, so Tuesday=2. daysSinceTuesday
+ * counts back from `date` to that week's Tuesday: 0 for Tuesday itself,
+ * 6 for the following Monday (the last day of the week).
+ */
+export function weekBoundsUtc(date: string, ianaTimeZone: string): { start: Date; end: Date } {
+  const startOfDay = DateTime.fromISO(date, { zone: ianaTimeZone }).startOf("day");
+  if (!startOfDay.isValid) {
+    throw new Error(`Invalid date "${date}" or timezone "${ianaTimeZone}": ${startOfDay.invalidReason}`);
+  }
+  const daysSinceTuesday = (startOfDay.weekday - 2 + 7) % 7;
+  const weekStart = startOfDay.minus({ days: daysSinceTuesday });
+  return { start: weekStart.toUTC().toJSDate(), end: weekStart.plus({ weeks: 1 }).toUTC().toJSDate() };
+}
