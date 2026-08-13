@@ -8,6 +8,7 @@ import { authRoutes } from "./routes/auth.routes.js";
 import { usersRoutes } from "./routes/users.routes.js";
 import { leaguesRoutes } from "./routes/leagues.routes.js";
 import { leagueInvitesRoutes } from "./routes/league-invites.routes.js";
+import { standingsRoutes } from "./routes/standings.routes.js";
 import { healthRoutes } from "./routes/health.routes.js";
 
 /**
@@ -55,6 +56,7 @@ export function buildApp() {
   app.register(usersRoutes, { prefix: "/users" });
   app.register(leaguesRoutes, { prefix: "/leagues" });
   app.register(leagueInvitesRoutes, { prefix: "/leagues" });
+  app.register(standingsRoutes, { prefix: "/leagues" });
   app.register(healthRoutes);
 
   return app;

@@ -342,7 +342,11 @@ describe("GET /leagues — multi-league home screen", () => {
 
     const gradedWin = await createTestGame({ sport: "nfl", homeTeam: "Bills", awayTeam: "Jets", status: "final" });
     await db.insert(result).values({ gameId: gradedWin.id, winningTeam: "Bills", source: "seed" });
-    await createTestPick(aliceMember.id, gradedWin.id, { selectedTeam: "Bills" });
+    const winningPick = await createTestPick(aliceMember.id, gradedWin.id, { selectedTeam: "Bills" });
+    // The home screen reads pick.outcome directly (JAC-37-42), not a
+    // live join against result — grade the pick explicitly rather than
+    // relying on the old selected_team = winning_team comparison.
+    await db.update(pick).set({ outcome: "win", gradedAt: new Date() }).where(eq(pick.id, winningPick.id));
 
     const upcoming = await createTestGame({
       sport: "nfl",

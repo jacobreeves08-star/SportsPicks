@@ -202,6 +202,16 @@ export async function leaguesRoutes(app: FastifyInstance): Promise<void> {
    * docs/leagues-and-membership.md for the full query design and why
    * wins/losses don't re-filter by current `sports` (the freeze rule
    * already makes that moot by the time anything is graded).
+   *
+   * Wins/losses read `pick.outcome` directly (JAC-37-42) rather than
+   * live-joining `result` and comparing `selected_team` — this genuinely
+   * is a frequently-read standings view, so "graded once, read many
+   * times" applies here too, not just to the authoritative standings
+   * endpoint in standings.routes.ts. This `rank` stays the simpler
+   * win-desc `RANK()` with ties allowed, a deliberate, different, and
+   * already-documented design for a quick-glance view — not replaced by
+   * the full tiebreaker chain, which lives only in the standings
+   * endpoint.
    */
   app.get("/", async (request) => {
     const userId = request.user!.id;
@@ -244,11 +254,10 @@ export async function leaguesRoutes(app: FastifyInstance): Promise<void> {
         select
           lm.id as league_member_id,
           lm.league_id,
-          count(*) filter (where p.selected_team = r.winning_team)::int as wins,
-          count(*) filter (where r.id is not null and p.selected_team != r.winning_team)::int as losses
+          count(*) filter (where p.outcome = 'win')::int as wins,
+          count(*) filter (where p.outcome = 'loss')::int as losses
         from league_member lm
         left join pick p on p.league_member_id = lm.id
-        left join result r on r.game_id = p.game_id
         where lm.left_at is null and lm.league_id in (${leagueIdsSql})
         group by lm.id, lm.league_id
       )
