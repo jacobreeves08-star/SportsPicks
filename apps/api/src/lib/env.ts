@@ -70,6 +70,15 @@ const envSchema = z.object({
   // docs/leagues-and-membership.md.
   MAX_LEAGUE_MEMBERS: z.coerce.number().int().positive().default(100),
   MAX_LEAGUES_PER_USER: z.coerce.number().int().positive().default(25),
+
+  // How long after a game finalizes score-poll keeps re-checking it for
+  // a provider-side revision (scoring reviews, forfeits, data errors —
+  // JAC-40). Based on result.created_at, written exactly once at
+  // insert — NOT game.updated_at, which gets bumped by routine,
+  // unrelated writes (e.g. schedule-ingest correcting a team-name typo
+  // on a long-final game) and would reopen this window for reasons that
+  // have nothing to do with finalization. See docs/scoring-and-standings.md.
+  REVISION_CHECK_WINDOW_HOURS: z.coerce.number().int().positive().default(48),
 });
 
 export type Env = z.infer<typeof envSchema>;

@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "../db/client.js";
-import { game, jobRun, pick, result } from "../db/schema.js";
+import { game, jobRun, pick, result, resultCorrection } from "../db/schema.js";
 import {
   createTestGame,
   createTestLeague,
@@ -99,9 +99,19 @@ describe("runScorePoll — exactly-once finalization", () => {
       homeTeam: "Bills",
       awayTeam: "Jets",
       status: "final",
-      startsAt: hoursAgo(5),
+      startsAt: hoursAgo(300),
     });
-    await db.insert(result).values({ gameId: testGame.id, winningTeam: "Bills", source: "espn" });
+    // Outside the revision-detection window (JAC-40) on purpose — this
+    // test is scoped to the MAIN finalization loop's idempotency, not
+    // revision detection (covered separately below); a result inside
+    // the window differing from the provider is legitimately supposed
+    // to be picked up as a revision, not ignored.
+    await db.insert(result).values({
+      gameId: testGame.id,
+      winningTeam: "Bills",
+      source: "espn",
+      createdAt: hoursAgo(300),
+    });
 
     // Already-final games aren't in score-poll's own candidate query
     // (status in scheduled/in_progress only), so this also proves the
@@ -437,5 +447,116 @@ describe("runScorePoll — seeded-league hand-calculated verification (JAC-37)",
     expect(aliceRecord.wins / (aliceRecord.wins + aliceRecord.losses)).toBeCloseTo(0.75, 5);
     expect(bobRecord.wins / (bobRecord.wins + bobRecord.losses)).toBeCloseTo(0.6667, 3);
     expect(carolRecord.wins / (carolRecord.wins + carolRecord.losses)).toBeCloseTo(0.3333, 3);
+  });
+});
+
+describe("runScorePoll — automatic revision detection (JAC-40)", () => {
+  it("regrades and records a correction when the provider revises a recently-final result", async () => {
+    const owner = await createTestUser();
+    const league = await createTestLeague(owner.id);
+    const memberWin = await createTestLeagueMember(owner.id, league.id, { role: "commissioner" });
+    const other = await createTestUser();
+    const memberLoss = await createTestLeagueMember(other.id, league.id, { role: "member" });
+
+    const testGame = await createTestGame({
+      externalId: "espn-revision-1",
+      homeTeam: "Bills",
+      awayTeam: "Jets",
+      status: "final",
+      startsAt: hoursAgo(10),
+    });
+    // Finalized recently — inside the default 48h revision window.
+    await db.insert(result).values({ gameId: testGame.id, winningTeam: "Bills", source: "espn" });
+    const pickBills = await createTestPick(memberWin.id, testGame.id, { selectedTeam: "Bills" });
+    const pickJets = await createTestPick(memberLoss.id, testGame.id, { selectedTeam: "Jets" });
+    await db.update(pick).set({ outcome: "win", gradedAt: new Date() }).where(eq(pick.id, pickBills.id));
+    await db.update(pick).set({ outcome: "loss", gradedAt: new Date() }).where(eq(pick.id, pickJets.id));
+
+    const captureMessageSpy = vi.spyOn(errorTracking, "captureMessage");
+    const provider = new MockSportsProvider({
+      results: [{ externalId: "espn-revision-1", status: "final", winnerSide: "away" }], // now Jets
+    });
+    await runScorePoll(provider);
+
+    const [resultRow] = await db.select().from(result).where(eq(result.gameId, testGame.id));
+    expect(resultRow!.winningTeam).toBe("Jets");
+    expect(resultRow!.revisionCount).toBe(1); // bump_result_revision trigger
+
+    const [billsPickRow] = await db.select().from(pick).where(eq(pick.id, pickBills.id));
+    const [jetsPickRow] = await db.select().from(pick).where(eq(pick.id, pickJets.id));
+    expect(billsPickRow!.outcome).toBe("loss"); // flipped
+    expect(jetsPickRow!.outcome).toBe("win"); // flipped
+
+    const [correctionRow] = await db.select().from(resultCorrection).where(eq(resultCorrection.gameId, testGame.id));
+    expect(correctionRow).toMatchObject({
+      oldWinningTeam: "Bills",
+      newWinningTeam: "Jets",
+      source: "provider_revision",
+    });
+
+    expect(captureMessageSpy).toHaveBeenCalledWith(
+      "score-poll: provider revised a previously-final result",
+      expect.objectContaining({ gameId: testGame.id }),
+    );
+  });
+
+  it("does nothing when the provider's result still matches the stored one", async () => {
+    const owner = await createTestUser();
+    const league = await createTestLeague(owner.id);
+    const member = await createTestLeagueMember(owner.id, league.id, { role: "commissioner" });
+    const testGame = await createTestGame({
+      externalId: "espn-no-revision",
+      homeTeam: "Bills",
+      awayTeam: "Jets",
+      status: "final",
+      startsAt: hoursAgo(10),
+    });
+    await db.insert(result).values({ gameId: testGame.id, winningTeam: "Bills", source: "espn" });
+    const testPick = await createTestPick(member.id, testGame.id, { selectedTeam: "Bills" });
+    await db.update(pick).set({ outcome: "win", gradedAt: new Date() }).where(eq(pick.id, testPick.id));
+
+    const provider = new MockSportsProvider({
+      results: [{ externalId: "espn-no-revision", status: "final", winnerSide: "home" }], // still Bills
+    });
+    await runScorePoll(provider);
+
+    const [resultRow] = await db.select().from(result).where(eq(result.gameId, testGame.id));
+    expect(resultRow!.revisionCount).toBe(0);
+    const corrections = await db.select().from(resultCorrection).where(eq(resultCorrection.gameId, testGame.id));
+    expect(corrections).toHaveLength(0);
+  });
+
+  it("does not re-check a game that finalized outside the revision window", async () => {
+    const owner = await createTestUser();
+    const league = await createTestLeague(owner.id);
+    const member = await createTestLeagueMember(owner.id, league.id, { role: "commissioner" });
+    const testGame = await createTestGame({
+      externalId: "espn-old-final",
+      homeTeam: "Bills",
+      awayTeam: "Jets",
+      status: "final",
+      startsAt: hoursAgo(200),
+    });
+    // Finalized 100 hours ago — outside the default 48h revision window.
+    await db.insert(result).values({
+      gameId: testGame.id,
+      winningTeam: "Bills",
+      source: "espn",
+      createdAt: hoursAgo(100),
+    });
+    const testPick = await createTestPick(member.id, testGame.id, { selectedTeam: "Bills" });
+    await db.update(pick).set({ outcome: "win", gradedAt: hoursAgo(100) }).where(eq(pick.id, testPick.id));
+
+    // The provider WOULD report a different winner if asked — proves
+    // the candidate query itself excludes this game, not that the
+    // provider happened to agree.
+    const provider = new MockSportsProvider({
+      results: [{ externalId: "espn-old-final", status: "final", winnerSide: "away" }],
+    });
+    await runScorePoll(provider);
+
+    const [resultRow] = await db.select().from(result).where(eq(result.gameId, testGame.id));
+    expect(resultRow!.winningTeam).toBe("Bills"); // untouched
+    expect(resultRow!.revisionCount).toBe(0);
   });
 });

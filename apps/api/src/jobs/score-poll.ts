@@ -1,11 +1,11 @@
 import { pathToFileURL } from "node:url";
-import { and, eq, inArray, lte, ne, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, lte, ne, sql } from "drizzle-orm";
 import { db } from "../db/client.js";
-import { game, result } from "../db/schema.js";
+import { game, result, resultCorrection } from "../db/schema.js";
 import { captureException, captureMessage, initErrorTracking } from "../lib/error-tracking.js";
 import { env } from "../lib/env.js";
 import { findStaleGames } from "../lib/game-staleness.js";
-import { gradeFinalGame, voidGamePicks } from "../lib/grading.js";
+import { gradeFinalGame, regradeGame, voidGamePicks } from "../lib/grading.js";
 import { pingHeartbeat } from "../lib/heartbeat.js";
 import { recordJobRun } from "../lib/job-run.js";
 import { logger } from "../lib/logger.js";
@@ -140,6 +140,85 @@ export async function runScorePoll(providerOverride?: SportsProvider): Promise<v
       }
     }
 
+    // Automatic revision detection (JAC-37-42): providers DO publish
+    // corrections (scoring reviews, forfeits, data errors). Re-fetches
+    // results for games that finalized within REVISION_CHECK_WINDOW_HOURS
+    // — based on result.created_at, written exactly once at insert, NOT
+    // game.updated_at (see env.ts's comment for why that's unsafe: it
+    // gets bumped by routine, unrelated writes like a team-name
+    // correction on a long-final game). If the freshly-fetched winner
+    // differs from the stored one, regrades every pick on that game and
+    // records a result_correction — see docs/scoring-and-standings.md.
+    const revisionWindowStart = new Date(startedAt.getTime() - env.REVISION_CHECK_WINDOW_HOURS * 60 * 60 * 1000);
+    const revisionCandidates = await db
+      .select({
+        id: game.id,
+        externalId: game.externalId,
+        sport: game.sport,
+        startsAt: game.startsAt,
+        homeTeam: game.homeTeam,
+        awayTeam: game.awayTeam,
+        storedWinningTeam: result.winningTeam,
+      })
+      .from(game)
+      .innerJoin(result, eq(result.gameId, game.id))
+      .where(and(eq(game.status, "final"), gte(result.createdAt, revisionWindowStart)));
+
+    const revisionPollable = revisionCandidates.filter(
+      (c): c is typeof c & { externalId: string } => c.externalId !== null,
+    );
+
+    let revisionCount = 0;
+    if (revisionPollable.length > 0) {
+      const revisionFetchParams: FetchResultsParams[] = revisionPollable.map((c) => ({
+        externalId: c.externalId,
+        sport: c.sport,
+        date: toYyyyMmDd(c.startsAt),
+      }));
+
+      const revisionResults = await provider.fetchResults(revisionFetchParams);
+      const revisionByExternalId = new Map(revisionResults.map((r) => [r.externalId, r]));
+
+      for (const candidate of revisionPollable) {
+        const canonicalResult = revisionByExternalId.get(candidate.externalId);
+        if (!canonicalResult || canonicalResult.status !== "final" || canonicalResult.winnerSide === null) {
+          continue;
+        }
+
+        const freshWinningTeam =
+          canonicalResult.winnerSide === "draw"
+            ? "DRAW"
+            : canonicalResult.winnerSide === "home"
+              ? candidate.homeTeam
+              : candidate.awayTeam;
+
+        if (freshWinningTeam === candidate.storedWinningTeam) continue; // no revision
+
+        const oldWinningTeam = candidate.storedWinningTeam;
+        await db.transaction(async (tx) => {
+          await tx.update(result).set({ winningTeam: freshWinningTeam }).where(eq(result.gameId, candidate.id));
+          await regradeGame(candidate.id, freshWinningTeam, tx as unknown as typeof db);
+          await tx.insert(resultCorrection).values({
+            gameId: candidate.id,
+            oldWinningTeam,
+            newWinningTeam: freshWinningTeam,
+            source: "provider_revision",
+          });
+        });
+        revisionCount += 1;
+
+        logger.warn(
+          { job: "score-poll", gameId: candidate.id, oldWinningTeam, newWinningTeam: freshWinningTeam },
+          "score-poll: provider revised a previously-final result",
+        );
+        captureMessage("score-poll: provider revised a previously-final result", {
+          gameId: candidate.id,
+          oldWinningTeam,
+          newWinningTeam: freshWinningTeam,
+        });
+      }
+    }
+
     // Reconciliation sweep (JAC-37-42): a bounded, self-healing safety
     // net for the case a postponed/cancelled transition's own void call
     // above got missed (a crash, a bug) — a cancelled game in particular
@@ -188,7 +267,7 @@ export async function runScorePoll(providerOverride?: SportsProvider): Promise<v
     });
 
     logger.info(
-      { job: "score-poll", itemCount, durationMs: finishedAt.getTime() - startedAt.getTime() },
+      { job: "score-poll", itemCount, revisionCount, durationMs: finishedAt.getTime() - startedAt.getTime() },
       "score-poll completed",
     );
   } catch (err) {
