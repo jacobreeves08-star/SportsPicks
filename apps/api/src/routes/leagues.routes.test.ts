@@ -119,6 +119,54 @@ describe("PUT /leagues/:leagueId/members/:memberId/picks/:gameId — ownership c
   });
 });
 
+describe("PUT /leagues/:leagueId/members/:memberId/picks/:gameId — rate limiting (JAC-43-48)", () => {
+  it("limits one member to PICK_WRITE_RATE_LIMIT_PER_MINUTE writes/minute, independently of a different member", async () => {
+    const owner = await createTestUser();
+    const league = await createTestLeague(owner.id);
+    const member = await createTestLeagueMember(owner.id, league.id, { role: "commissioner" });
+    const games = await Promise.all(
+      Array.from({ length: 31 }, () =>
+        createTestGame({ homeTeam: "Bills", awayTeam: "Jets", startsAt: new Date(Date.now() + 3600_000) }),
+      ),
+    );
+    const token = await tokenFor(owner.id);
+
+    let lastStatus = 200;
+    let lastBody: unknown;
+    for (const g of games) {
+      const res = await app.inject({
+        method: "PUT",
+        url: `/leagues/${league.id}/members/${member.id}/picks/${g.id}`,
+        headers: auth(token),
+        payload: { selectedTeam: "Bills" },
+      });
+      lastStatus = res.statusCode;
+      lastBody = res.json();
+    }
+    expect(lastStatus).toBe(429);
+    expect((lastBody as { error: { code: string; retryAfterSeconds: number } }).error.code).toBe("RATE_LIMITED");
+    expect((lastBody as { error: { retryAfterSeconds: number } }).error.retryAfterSeconds).toBeGreaterThan(0);
+
+    // A different member, in a different league, has their own budget.
+    const otherOwner = await createTestUser();
+    const otherLeague = await createTestLeague(otherOwner.id);
+    const otherMember = await createTestLeagueMember(otherOwner.id, otherLeague.id, { role: "commissioner" });
+    const otherGame = await createTestGame({
+      homeTeam: "Chiefs",
+      awayTeam: "Raiders",
+      startsAt: new Date(Date.now() + 3600_000),
+    });
+    const otherToken = await tokenFor(otherOwner.id);
+    const otherRes = await app.inject({
+      method: "PUT",
+      url: `/leagues/${otherLeague.id}/members/${otherMember.id}/picks/${otherGame.id}`,
+      headers: auth(otherToken),
+      payload: { selectedTeam: "Chiefs" },
+    });
+    expect(otherRes.statusCode).toBe(200);
+  });
+});
+
 /**
  * JAC-33 (lock enforcement, "the single most important correctness
  * requirement in the app") — the literal required tests, hitting the

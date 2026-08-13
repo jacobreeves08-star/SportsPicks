@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import rateLimit from "@fastify/rate-limit";
 import { and, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { game, league, leagueMember, leagueMemberReport, leagueInviteCode, pick, pickAuditLog, user } from "../db/schema.js";
@@ -9,7 +10,7 @@ import { env } from "../lib/env.js";
 import { ApiError } from "../lib/http-errors.js";
 import { logger } from "../lib/logger.js";
 import { generateInviteCode, isUniqueConstraintViolation } from "../lib/invite-code.js";
-import { registerAccountRateLimit } from "../lib/rate-limit.js";
+import { rateLimitErrorResponseBuilder, registerAccountRateLimit } from "../lib/rate-limit.js";
 import { requireLeagueCommissioner, requireLeagueMembership, requireOwnMembership } from "../lib/authorization.js";
 import { rejectionToApiError, writePick } from "../lib/pick-write.js";
 import { ESPN_SPORT_SLUGS } from "../lib/sports-provider.js";
@@ -376,149 +377,190 @@ export async function leaguesRoutes(app: FastifyInstance): Promise<void> {
     },
   );
 
-  app.put(
-    "/:leagueId/members/:memberId/picks/:gameId",
-    {
-      schema: {
-        params: {
-          type: "object",
-          required: ["leagueId", "memberId", "gameId"],
-          properties: {
-            leagueId: { type: "string" },
-            memberId: { type: "string" },
-            gameId: { type: "string" },
+  /**
+   * Pick-write rate limiting (JAC-43-48) — per member, not just the
+   * general account-wide limit registered above: a dedicated, tighter
+   * ceiling on the two routes that actually mutate picks, so a buggy or
+   * abusive client hammering writes specifically is caught faster than
+   * the broader 300/min covers every route in this file. A fresh,
+   * independent registration (not a route-level `config.rateLimit` or a
+   * second `app.rateLimit()` off the account registration above) — see
+   * lib/rate-limit.ts's comment for why that's required for the check to
+   * actually run, not just look configured. Keyed by `request.user.id`,
+   * same as the account-wide limit — `requireOwnMembership` below already
+   * guarantees `memberId` in the URL is the caller's own, so keying by
+   * either is equivalent for accepted requests, and the user id is
+   * available before that check even runs.
+   */
+  await app.register(async (instance) => {
+    await instance.register(rateLimit, {
+      max: env.PICK_WRITE_RATE_LIMIT_PER_MINUTE,
+      timeWindow: "1 minute",
+      hook: "preHandler",
+      keyGenerator: (req) => req.user!.id,
+      errorResponseBuilder: rateLimitErrorResponseBuilder,
+    });
+
+    instance.put(
+      "/:leagueId/members/:memberId/picks/:gameId",
+      {
+        schema: {
+          params: {
+            type: "object",
+            required: ["leagueId", "memberId", "gameId"],
+            properties: {
+              leagueId: { type: "string" },
+              memberId: { type: "string" },
+              gameId: { type: "string" },
+            },
+          },
+          body: {
+            type: "object",
+            required: ["selectedTeam"],
+            properties: { selectedTeam: { type: "string", minLength: 1 } },
           },
         },
-        body: {
-          type: "object",
-          required: ["selectedTeam"],
-          properties: { selectedTeam: { type: "string", minLength: 1 } },
-        },
       },
-    },
-    async (request) => {
-      const { leagueId, memberId, gameId } = request.params as {
-        leagueId: string;
-        memberId: string;
-        gameId: string;
-      };
-      const { selectedTeam } = request.body as { selectedTeam: string };
+      async (request) => {
+        const { leagueId, memberId, gameId } = request.params as {
+          leagueId: string;
+          memberId: string;
+          gameId: string;
+        };
+        const { selectedTeam } = request.body as { selectedTeam: string };
 
-      // Ownership check: memberId in the URL must be the caller's own
-      // membership row for this league — a mismatch here is exactly the
-      // "write only your own picks" case JAC-17 asks to be tested.
-      await requireOwnMembership(request.user!.id, leagueId, memberId);
+        // Ownership check: memberId in the URL must be the caller's own
+        // membership row for this league — a mismatch here is exactly the
+        // "write only your own picks" case JAC-17 asks to be tested.
+        await requireOwnMembership(request.user!.id, leagueId, memberId);
 
-      const [leagueRow] = await db.select({ sports: league.sports }).from(league).where(eq(league.id, leagueId)).limit(1);
+        const [leagueRow] = await db
+          .select({ sports: league.sports })
+          .from(league)
+          .where(eq(league.id, leagueId))
+          .limit(1);
 
-      const result = await writePick(db, {
-        leagueMemberId: memberId,
-        gameId,
-        selectedTeam,
-        leagueSports: leagueRow!.sports,
-      });
+        const result = await writePick(db, {
+          leagueMemberId: memberId,
+          gameId,
+          selectedTeam,
+          leagueSports: leagueRow!.sports,
+        });
 
-      if (!result.accepted) {
-        const field = result.reason === "INVALID_TEAM_SELECTION" ? "selectedTeam" : "gameId";
-        throw rejectionToApiError(result.reason, result.message, field);
-      }
+        if (!result.accepted) {
+          const field = result.reason === "INVALID_TEAM_SELECTION" ? "selectedTeam" : "gameId";
+          throw rejectionToApiError(result.reason, result.message, field);
+        }
 
-      return result.pick;
-    },
-  );
+        return result.pick;
+      },
+    );
 
-  /**
-   * Batch write a full slate at once (JAC-31-36). Per-game, not
-   * all-or-nothing: one outer transaction so accepted writes become
-   * visible together, but each game's writePick() call runs inside its
-   * OWN nested transaction (a real Postgres SAVEPOINT via Drizzle's
-   * nested db.transaction() support — verified against real Postgres
-   * in Epic 5 step 1) so an unanticipated failure on one game can never
-   * poison the others. writePick() itself doesn't throw for an
-   * ordinary rejection (locked/canceled/etc — that's a normal return
-   * value), so the savepoint is a defensive backstop, not the primary
-   * mechanism; it exists specifically so a bug or a genuine DB-level
-   * exception on game N doesn't roll back games 1..N-1's already-
-   * accepted picks. See docs/picks-and-locking.md.
-   */
-  app.post(
-    "/:leagueId/members/:memberId/picks/batch",
-    {
-      schema: {
-        params: {
-          type: "object",
-          required: ["leagueId", "memberId"],
-          properties: { leagueId: { type: "string" }, memberId: { type: "string" } },
-        },
-        body: {
-          type: "object",
-          required: ["picks"],
-          properties: {
-            picks: {
-              type: "array",
-              minItems: 1,
-              maxItems: 50,
-              items: {
-                type: "object",
-                required: ["gameId", "selectedTeam"],
-                properties: { gameId: { type: "string" }, selectedTeam: { type: "string", minLength: 1 } },
+    /**
+     * Batch write a full slate at once (JAC-31-36). Per-game, not
+     * all-or-nothing: one outer transaction so accepted writes become
+     * visible together, but each game's writePick() call runs inside its
+     * OWN nested transaction (a real Postgres SAVEPOINT via Drizzle's
+     * nested db.transaction() support — verified against real Postgres
+     * in Epic 5 step 1) so an unanticipated failure on one game can never
+     * poison the others. writePick() itself doesn't throw for an
+     * ordinary rejection (locked/canceled/etc — that's a normal return
+     * value), so the savepoint is a defensive backstop, not the primary
+     * mechanism; it exists specifically so a bug or a genuine DB-level
+     * exception on game N doesn't roll back games 1..N-1's already-
+     * accepted picks. See docs/picks-and-locking.md.
+     */
+    instance.post(
+      "/:leagueId/members/:memberId/picks/batch",
+      {
+        schema: {
+          params: {
+            type: "object",
+            required: ["leagueId", "memberId"],
+            properties: { leagueId: { type: "string" }, memberId: { type: "string" } },
+          },
+          body: {
+            type: "object",
+            required: ["picks"],
+            properties: {
+              picks: {
+                type: "array",
+                minItems: 1,
+                maxItems: 50,
+                items: {
+                  type: "object",
+                  required: ["gameId", "selectedTeam"],
+                  properties: { gameId: { type: "string" }, selectedTeam: { type: "string", minLength: 1 } },
+                },
               },
             },
           },
         },
       },
-    },
-    async (request) => {
-      const { leagueId, memberId } = request.params as { leagueId: string; memberId: string };
-      const { picks } = request.body as { picks: Array<{ gameId: string; selectedTeam: string }> };
+      async (request) => {
+        const { leagueId, memberId } = request.params as { leagueId: string; memberId: string };
+        const { picks } = request.body as { picks: Array<{ gameId: string; selectedTeam: string }> };
 
-      await requireOwnMembership(request.user!.id, leagueId, memberId);
+        await requireOwnMembership(request.user!.id, leagueId, memberId);
 
-      const [leagueRow] = await db.select({ sports: league.sports }).from(league).where(eq(league.id, leagueId)).limit(1);
+        const [leagueRow] = await db
+          .select({ sports: league.sports })
+          .from(league)
+          .where(eq(league.id, leagueId))
+          .limit(1);
 
-      const results = await db.transaction(async (tx) => {
-        const perGame: Array<{
-          gameId: string;
-          status: "accepted" | "rejected";
-          pick?: { selectedTeam: string };
-          error?: { code: string; message: string };
-        }> = [];
+        const results = await db.transaction(async (tx) => {
+          const perGame: Array<{
+            gameId: string;
+            status: "accepted" | "rejected";
+            pick?: { selectedTeam: string };
+            error?: { code: string; message: string };
+          }> = [];
 
-        for (const { gameId, selectedTeam } of picks) {
-          try {
-            const result = await (tx as unknown as typeof db).transaction(async (nestedTx) =>
-              writePick(nestedTx as unknown as typeof db, {
-                leagueMemberId: memberId,
+          for (const { gameId, selectedTeam } of picks) {
+            try {
+              const result = await (tx as unknown as typeof db).transaction(async (nestedTx) =>
+                writePick(nestedTx as unknown as typeof db, {
+                  leagueMemberId: memberId,
+                  gameId,
+                  selectedTeam,
+                  leagueSports: leagueRow!.sports,
+                }),
+              );
+
+              if (result.accepted) {
+                perGame.push({ gameId, status: "accepted", pick: { selectedTeam: result.pick.selectedTeam } });
+              } else {
+                const field = result.reason === "INVALID_TEAM_SELECTION" ? "selectedTeam" : "gameId";
+                const apiError = rejectionToApiError(result.reason, result.message, field);
+                perGame.push({
+                  gameId,
+                  status: "rejected",
+                  error: { code: apiError.code, message: apiError.message },
+                });
+              }
+            } catch (err) {
+              // Unanticipated failure for this ONE game — the nested
+              // transaction's savepoint already rolled back just this
+              // game's attempt. Report it and keep going; never let one
+              // game's surprise poison the rest of the batch.
+              logger.error({ leagueId, memberId, gameId, err }, "batch pick write failed unexpectedly for one game");
+              captureException(err);
+              perGame.push({
                 gameId,
-                selectedTeam,
-                leagueSports: leagueRow!.sports,
-              }),
-            );
-
-            if (result.accepted) {
-              perGame.push({ gameId, status: "accepted", pick: { selectedTeam: result.pick.selectedTeam } });
-            } else {
-              const field = result.reason === "INVALID_TEAM_SELECTION" ? "selectedTeam" : "gameId";
-              const apiError = rejectionToApiError(result.reason, result.message, field);
-              perGame.push({ gameId, status: "rejected", error: { code: apiError.code, message: apiError.message } });
+                status: "rejected",
+                error: { code: "INTERNAL_ERROR", message: "Unexpected error" },
+              });
             }
-          } catch (err) {
-            // Unanticipated failure for this ONE game — the nested
-            // transaction's savepoint already rolled back just this
-            // game's attempt. Report it and keep going; never let one
-            // game's surprise poison the rest of the batch.
-            logger.error({ leagueId, memberId, gameId, err }, "batch pick write failed unexpectedly for one game");
-            captureException(err);
-            perGame.push({ gameId, status: "rejected", error: { code: "INTERNAL_ERROR", message: "Unexpected error" } });
           }
-        }
 
-        return perGame;
-      });
+          return perGame;
+        });
 
-      return { results };
-    },
-  );
+        return { results };
+      },
+    );
+  });
 
   /**
    * The slate for one calendar day, computed in the LEAGUE's timezone
