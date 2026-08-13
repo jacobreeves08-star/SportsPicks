@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { user } from "../db/schema.js";
 import { authenticate } from "../plugins/authenticate.js";
+import { logEvent } from "../lib/analytics.js";
 import { createEmailProvider } from "../lib/email-provider.js";
 import { env } from "../lib/env.js";
 import { ApiError } from "../lib/http-errors.js";
@@ -122,6 +123,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
             .returning();
           const token = await issueVerificationToken(created!.id, "email_verify");
           await emailProvider.sendVerificationEmail(normalizedEmail, verificationLink("verify-email", token));
+          await logEvent("user_signed_up", { userId: created!.id });
         }
 
         reply.status(201);

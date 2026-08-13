@@ -1,9 +1,11 @@
+import { DateTime } from "luxon";
 import { eq, sql } from "drizzle-orm";
 import { db } from "../db/client.js";
-import { game } from "../db/schema.js";
+import { game, league } from "../db/schema.js";
+import { logEvent } from "./analytics.js";
 import { ApiError } from "./http-errors.js";
 import { invalidateLeague } from "./slate-cache.js";
-import { nowUtc } from "./time.js";
+import { dayBoundsUtc, nowUtc } from "./time.js";
 
 export type PickWriteRejectionReason =
   | "GAME_NOT_FOUND"
@@ -151,6 +153,35 @@ export async function writePick(
   // eviction is never wrong, only ever a wasted cache miss on the next
   // read, never stale-but-incorrect data.
   invalidateLeague(leagueId);
+
+  // JAC-44: best-effort, never blocks the write above (logEvent
+  // swallows its own errors) — pick_submitted always fires on accept;
+  // slate_completed fires too, in the same call, the moment this
+  // member has no unpicked non-postponed/cancelled game left in
+  // today's slate (the league's timezone, matching every other
+  // "what day is it" computation in this app).
+  await logEvent("pick_submitted", { leagueId, leagueMemberId, metadata: { gameId } });
+  const [leagueRow] = await executor.select({ timezone: league.timezone }).from(league).where(eq(league.id, leagueId)).limit(1);
+  if (leagueRow) {
+    const localDate = DateTime.fromJSDate(gameRow.startsAt, { zone: "utc" }).setZone(leagueRow.timezone).toISODate();
+    if (localDate) {
+      const { start, end } = dayBoundsUtc(localDate, leagueRow.timezone);
+      const sportsSql = sql.join(
+        leagueSports.map((s) => sql`${s}`),
+        sql`, `,
+      );
+      const remaining = await executor.execute<{ count: string }>(sql`
+        select count(*) as count from game g
+        where g.sport in (${sportsSql})
+          and g.starts_at >= ${start} and g.starts_at < ${end}
+          and g.status not in ('postponed', 'canceled')
+          and not exists (select 1 from pick p where p.game_id = g.id and p.league_member_id = ${leagueMemberId})
+      `);
+      if (Number(remaining.rows[0]?.count ?? 0) === 0) {
+        await logEvent("slate_completed", { leagueId, leagueMemberId, metadata: { date: localDate } });
+      }
+    }
+  }
 
   return {
     accepted: true,

@@ -42,6 +42,7 @@ Also **deleted outright** (not anonymized, actually removed): every `session` ro
 - Every `league_member` row — the user's league memberships, roles, and join dates stay exactly as they were.
 - Every `pick` row — every pick they ever made stays attached to their (now-anonymized) `league_member` row, so past standings, win/loss records, and head-to-head history for every league they were in remain fully intact and correct.
 - Every `notification_log` row (JAC-43-48) — a `(notification_type, league_member_id, notification_date)` idempotency marker with no personal data (no email, no message content), so there's nothing to scrub. It stays attached to the same `league_member` row picks do.
+- Every `analytics_event` row (JAC-43-48) — see `docs/analytics.md`. `metadata` is populated only with IDs and non-identifying context by construction, never PII, so a row referencing an anonymized user's now-scrubbed account is expected and harmless, not a bug.
 
 ## Idempotency and failure handling
 

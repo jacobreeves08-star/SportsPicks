@@ -4,6 +4,7 @@ import { and, eq, isNull, sql } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { league, leagueInviteCode, leagueMember } from "../db/schema.js";
 import { authenticate } from "../plugins/authenticate.js";
+import { logEvent } from "../lib/analytics.js";
 import { requireLeagueCommissioner } from "../lib/authorization.js";
 import { env } from "../lib/env.js";
 import { ApiError } from "../lib/http-errors.js";
@@ -217,6 +218,11 @@ export async function leagueInvitesRoutes(app: FastifyInstance): Promise<void> {
 
         if (joined.rows.length > 0) {
           const [leagueRow] = await db.select().from(league).where(eq(league.id, joined.rows[0]!.league_id)).limit(1);
+          await logEvent("league_joined", {
+            userId,
+            leagueId: joined.rows[0]!.league_id,
+            leagueMemberId: joined.rows[0]!.id,
+          });
           return { leagueId: joined.rows[0]!.league_id, leagueName: leagueRow!.name };
         }
 

@@ -4,6 +4,7 @@ import { and, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { game, league, leagueMember, leagueMemberReport, leagueInviteCode, pick, pickAuditLog, user } from "../db/schema.js";
 import { authenticate } from "../plugins/authenticate.js";
+import { logEvent } from "../lib/analytics.js";
 import { containsDisallowedContent } from "../lib/content-filter.js";
 import { captureException } from "../lib/error-tracking.js";
 import { env } from "../lib/env.js";
@@ -211,6 +212,8 @@ export async function leaguesRoutes(app: FastifyInstance): Promise<void> {
         const inviteCode = await insertInviteCodeWithRetry(tx as unknown as typeof db, createdLeague!.id);
         return { createdLeague: createdLeague!, inviteCode };
       });
+
+      await logEvent("league_created", { userId, leagueId: createdLeague!.id });
 
       reply.status(201);
       return { ...createdLeague, memberCount: 1, inviteCode: inviteCode.code };
