@@ -70,6 +70,11 @@ describe("POST /auth/signup", () => {
     expect(results.slice(0, 5).every((r) => r.statusCode !== 429)).toBe(true);
     expect(results[5]!.statusCode).toBe(429);
     expect(results[5]!.json().error.code).toBe("RATE_LIMITED");
+    // JAC-43-48: the global errorResponseBuilder (app.ts) attaches this
+    // to every 429 in the app, not just signup's — retryAfterSeconds
+    // lets a client show "try again in Xs" instead of a generic message.
+    expect(typeof results[5]!.json().error.retryAfterSeconds).toBe("number");
+    expect(results[5]!.json().error.retryAfterSeconds).toBeGreaterThan(0);
   });
 });
 

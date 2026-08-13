@@ -6,6 +6,7 @@ import { authenticate } from "../plugins/authenticate.js";
 import { createEmailProvider } from "../lib/email-provider.js";
 import { env } from "../lib/env.js";
 import { ApiError } from "../lib/http-errors.js";
+import { registerAccountRateLimit } from "../lib/rate-limit.js";
 import { hashPassword, verifyPassword } from "../lib/password.js";
 import { revokeAllSessionsForUser } from "../lib/session.js";
 import { isValidIanaTimeZone, nowUtc } from "../lib/time.js";
@@ -30,6 +31,7 @@ const PUBLIC_PROFILE_COLUMNS = {
 
 export async function usersRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("preHandler", authenticate);
+  await registerAccountRateLimit(app);
 
   app.get("/me", async (request) => {
     const [profile] = await db.select(PUBLIC_PROFILE_COLUMNS).from(user).where(eq(user.id, request.user!.id)).limit(1);

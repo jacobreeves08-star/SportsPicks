@@ -4,6 +4,7 @@ import rateLimit from "@fastify/rate-limit";
 import { captureException } from "./lib/error-tracking.js";
 import { toErrorResponse } from "./lib/http-errors.js";
 import { logger } from "./lib/logger.js";
+import { rateLimitErrorResponseBuilder } from "./lib/rate-limit.js";
 import { authRoutes } from "./routes/auth.routes.js";
 import { usersRoutes } from "./routes/users.routes.js";
 import { leaguesRoutes } from "./routes/leagues.routes.js";
@@ -29,9 +30,19 @@ export function buildApp() {
 
   app.decorateRequest("user", null);
 
+  // `errorResponseBuilder` is passed explicitly to EVERY separate
+  // `@fastify/rate-limit` registration in this app (not just this root
+  // one) — confirmed empirically that a second, independent
+  // `app.register(rateLimit, ...)` call (registerAccountRateLimit,
+  // league-invites.routes.ts's invite-code-specific one) does NOT
+  // inherit this from the root registration; each one's config is
+  // entirely its own. See lib/rate-limit.ts's
+  // `rateLimitErrorResponseBuilder` for the shared implementation and
+  // why it must be reused, not copy-pasted, at every call site.
   app.register(rateLimit, {
     max: 100,
     timeWindow: "1 minute",
+    errorResponseBuilder: rateLimitErrorResponseBuilder,
   });
 
   // Every error response uses the envelope documented in

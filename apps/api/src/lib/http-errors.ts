@@ -22,12 +22,14 @@ interface ErrorEnvelope {
     code: string;
     message: string;
     fields?: Array<{ field: string; message: string }>;
+    retryAfterSeconds?: number;
   };
 }
 
 interface FastifyLikeError {
   statusCode?: number;
   validation?: Array<{ instancePath: string; message?: string }>;
+  retryAfterSeconds?: number;
 }
 
 export function toErrorResponse(err: unknown): { statusCode: number; body: ErrorEnvelope } {
@@ -60,10 +62,22 @@ export function toErrorResponse(err: unknown): { statusCode: number; body: Error
   // `validation` — give it its own machine-readable code rather than the
   // generic REQUEST_ERROR fallback, since a client should genuinely
   // handle "back off and retry" differently from an ordinary 4xx.
+  // `retryAfterSeconds` comes from app.ts's global errorResponseBuilder
+  // (JAC-43-48) — lets a client show "try again in Xs" instead of a
+  // generic message, on top of the retry-after header the plugin
+  // already sets.
   if (fastifyErr.statusCode === 429) {
     return {
       statusCode: 429,
-      body: { error: { code: "RATE_LIMITED", message: err instanceof Error ? err.message : "Rate limited" } },
+      body: {
+        error: {
+          code: "RATE_LIMITED",
+          message: err instanceof Error ? err.message : "Rate limited",
+          ...(typeof fastifyErr.retryAfterSeconds === "number" && {
+            retryAfterSeconds: fastifyErr.retryAfterSeconds,
+          }),
+        },
+      },
     };
   }
 

@@ -172,6 +172,47 @@ describe("GET /leagues/preview", () => {
     expect(res.statusCode).toBe(409);
     expect(res.json().error.code).toBe("INVITE_CODE_MAX_USES_REACHED");
   });
+
+  /**
+   * JAC-43-48 regression: this endpoint's per-user 10/min limit used to
+   * be a SILENT no-op — derived via a second `app.rateLimit()` call off
+   * the same registration as the route-level `config.rateLimit` per-IP
+   * check, both sharing one single-fire-per-request guard, so only the
+   * first (per-IP) ever actually ran. Now a genuinely independent
+   * registration (lib/rate-limit.ts) — this asserts it actually rejects
+   * the 11th request from ONE user, and that a different user is
+   * unaffected (proving it's keyed by account, not by the shared IP
+   * every app.inject() call uses).
+   */
+  it("limits one user to 10 requests/minute, independently of a different user", async () => {
+    const owner = await createTestUser();
+    const testLeague = await createTestLeague(owner.id);
+    await createTestLeagueMember(owner.id, testLeague.id, { role: "commissioner" });
+    const code = await createTestInviteCode(testLeague.id);
+
+    const someone = await createTestUser();
+    const token = await tokenFor(someone.id);
+
+    let lastStatus = 200;
+    let lastBody: unknown;
+    for (let i = 0; i < 11; i++) {
+      const res = await app.inject({ method: "GET", url: `/leagues/preview?code=${code.code}`, headers: auth(token) });
+      lastStatus = res.statusCode;
+      lastBody = res.json();
+    }
+    expect(lastStatus).toBe(429);
+    expect((lastBody as { error: { code: string; retryAfterSeconds: number } }).error.code).toBe("RATE_LIMITED");
+    expect((lastBody as { error: { retryAfterSeconds: number } }).error.retryAfterSeconds).toBeGreaterThan(0);
+
+    const other = await createTestUser();
+    const otherToken = await tokenFor(other.id);
+    const otherRes = await app.inject({
+      method: "GET",
+      url: `/leagues/preview?code=${code.code}`,
+      headers: auth(otherToken),
+    });
+    expect(otherRes.statusCode).toBe(200);
+  });
 });
 
 describe("POST /leagues/join", () => {

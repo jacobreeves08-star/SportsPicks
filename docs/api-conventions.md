@@ -41,7 +41,7 @@ Codes in use today:
 | `INVALID_OR_EXPIRED_TOKEN` | 400 | An email-verification/email-change/password-reset link's token is invalid, expired, or already used |
 | `FORBIDDEN` | 403 | Authenticated, but not authorized — failed a membership/ownership/role check (JAC-17) |
 | `NOT_FOUND` | 404 | Unmatched route |
-| `RATE_LIMITED` | 429 | `@fastify/rate-limit` tripped on the signup/login/password-reset-request routes — `toErrorResponse` special-cases its 429 into this code rather than the generic `REQUEST_ERROR` fallback |
+| `RATE_LIMITED` | 429 | `@fastify/rate-limit` tripped — `toErrorResponse` special-cases its 429 into this code rather than the generic `REQUEST_ERROR` fallback. `retryAfterSeconds` is included in the body (same value as the `retry-after` header) when available, so a client can show "try again in Xs" (JAC-43-48) |
 | `REQUEST_ERROR` | 4xx | Generic fallback for a 4xx with no more specific code |
 | `INTERNAL_ERROR` | 500 | Unexpected error; real detail never reaches the client |
 | `INVITE_CODE_NOT_FOUND` | 404 | Invite code doesn't exist (JAC-25-30) |

@@ -9,6 +9,7 @@ import { env } from "../lib/env.js";
 import { ApiError } from "../lib/http-errors.js";
 import { logger } from "../lib/logger.js";
 import { generateInviteCode, isUniqueConstraintViolation } from "../lib/invite-code.js";
+import { registerAccountRateLimit } from "../lib/rate-limit.js";
 import { requireLeagueCommissioner, requireLeagueMembership, requireOwnMembership } from "../lib/authorization.js";
 import { rejectionToApiError, writePick } from "../lib/pick-write.js";
 import { ESPN_SPORT_SLUGS } from "../lib/sports-provider.js";
@@ -121,6 +122,7 @@ async function isSportsSelectionFrozen(leagueRow: typeof league.$inferSelect): P
  */
 export async function leaguesRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("preHandler", authenticate);
+  await registerAccountRateLimit(app);
 
   app.post(
     "/",

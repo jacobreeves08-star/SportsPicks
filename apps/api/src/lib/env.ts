@@ -79,6 +79,17 @@ const envSchema = z.object({
   // on a long-final game) and would reopen this window for reasons that
   // have nothing to do with finalization. See docs/scoring-and-standings.md.
   REVISION_CHECK_WINDOW_HOURS: z.coerce.number().int().positive().default(48),
+
+  // Launch readiness (JAC-43-48). Rate limiting — see
+  // docs/rate-limiting-and-caching.md. Per-account global ceiling,
+  // distinct from the existing IP-keyed global limit in app.ts: an
+  // authenticated account hammering from rotating IPs would otherwise
+  // never trip the IP-based limit at all.
+  ACCOUNT_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(300),
+  // Per-member, not per-IP — a household sharing one IP shouldn't be
+  // throttled together while one member is legitimately picking a full
+  // slate.
+  PICK_WRITE_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(30),
 });
 
 export type Env = z.infer<typeof envSchema>;

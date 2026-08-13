@@ -7,6 +7,7 @@ import { authenticate } from "../plugins/authenticate.js";
 import { requireLeagueCommissioner, requireLeagueMembership } from "../lib/authorization.js";
 import { ApiError } from "../lib/http-errors.js";
 import { regradeGame } from "../lib/grading.js";
+import { registerAccountRateLimit } from "../lib/rate-limit.js";
 import { computeStandings, type Timeframe } from "../lib/standings.js";
 import { dayBoundsUtc } from "../lib/time.js";
 
@@ -44,6 +45,7 @@ function decodeCorrectionsCursor(cursor: string): { createdAt: string; id: strin
  */
 export async function standingsRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("preHandler", authenticate);
+  await registerAccountRateLimit(app);
 
   /**
    * Ranked standings for one timeframe (today/week/season, confirmed
