@@ -1,10 +1,11 @@
 import { pathToFileURL } from "node:url";
-import { and, eq, inArray, lte, ne } from "drizzle-orm";
+import { and, eq, inArray, lte, ne, sql } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { game, result } from "../db/schema.js";
 import { captureException, captureMessage, initErrorTracking } from "../lib/error-tracking.js";
 import { env } from "../lib/env.js";
 import { findStaleGames } from "../lib/game-staleness.js";
+import { gradeFinalGame, voidGamePicks } from "../lib/grading.js";
 import { pingHeartbeat } from "../lib/heartbeat.js";
 import { recordJobRun } from "../lib/job-run.js";
 import { logger } from "../lib/logger.js";
@@ -28,6 +29,14 @@ import {
  * the accompanying `result` row is written in the SAME transaction, so
  * "final with no result row" can never be observed even mid-crash.
  * Re-running against an already-final game is a guaranteed no-op.
+ *
+ * Grading (JAC-37-42) happens in that same transaction too: every pick
+ * on a game that just finalized is graded win/loss against the winning
+ * team, and every pick on a game that just transitioned to postponed/
+ * cancelled is voided — see lib/grading.ts and
+ * docs/scoring-and-standings.md. A separate bounded reconciliation
+ * sweep below self-heals any postponed/cancelled game whose picks
+ * somehow missed that.
  */
 export async function runScorePoll(providerOverride?: SportsProvider): Promise<void> {
   const startedAt = new Date();
@@ -74,10 +83,24 @@ export async function runScorePoll(providerOverride?: SportsProvider): Promise<v
             // postponement/cancellation discovered mid-slate), guarded
             // the same way so a late/out-of-order response can never
             // downgrade an already-final game.
-            await tx
+            const updated = await tx
               .update(game)
               .set({ status: canonicalResult.status })
-              .where(and(eq(game.id, candidate.id), ne(game.status, "final")));
+              .where(and(eq(game.id, candidate.id), ne(game.status, "final")))
+              .returning({ id: game.id });
+
+            // A genuine transition into postponed/cancelled (score-poll's
+            // own candidate query only ever selects scheduled/in_progress
+            // games, so this can never be a re-affirmation of an already-
+            // postponed/cancelled row) voids every ungraded pick on it —
+            // postponed/cancelled games are voided for everyone, never
+            // counted as a loss. See docs/scoring-and-standings.md.
+            if (
+              updated.length > 0 &&
+              (canonicalResult.status === "postponed" || canonicalResult.status === "canceled")
+            ) {
+              await voidGamePicks(candidate.id, tx as unknown as typeof db);
+            }
             return false;
           }
 
@@ -109,11 +132,38 @@ export async function runScorePoll(providerOverride?: SportsProvider): Promise<v
                 : candidate.awayTeam;
 
           await tx.insert(result).values({ gameId: candidate.id, winningTeam, source: "espn" });
+          await gradeFinalGame(candidate.id, winningTeam, tx as unknown as typeof db);
           return true;
         });
 
         if (transitionedToFinal) itemCount += 1;
       }
+    }
+
+    // Reconciliation sweep (JAC-37-42): a bounded, self-healing safety
+    // net for the case a postponed/cancelled transition's own void call
+    // above got missed (a crash, a bug) — a cancelled game in particular
+    // has no other recovery path once its date falls outside schedule-
+    // ingest's rolling lookback window, unlike postponed games, which
+    // keep reappearing via schedule-ingest's own unbounded postponed-
+    // game recovery pass. See docs/scoring-and-standings.md. Cheap:
+    // most historical picks are already graded, so this is highly
+    // selective once scoped to postponed/cancelled games specifically.
+    const needsReconciliation = await db.execute<{ id: string }>(sql`
+      select g.id from game g
+      where g.status in ('postponed', 'canceled')
+        and exists (select 1 from pick p where p.game_id = g.id and p.outcome is null)
+      order by g.starts_at desc
+      limit 50
+    `);
+    for (const row of needsReconciliation.rows) {
+      await voidGamePicks(row.id, db);
+    }
+    if (needsReconciliation.rows.length > 0) {
+      logger.info(
+        { job: "score-poll", reconciledCount: needsReconciliation.rows.length },
+        "reconciliation sweep voided ungraded picks on postponed/cancelled games",
+      );
     }
 
     const staleGames = await findStaleGames();

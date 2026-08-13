@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "../db/client.js";
-import { game, jobRun } from "../db/schema.js";
+import { game, jobRun, pick } from "../db/schema.js";
 import {
   createTestGame,
   createTestLeague,
@@ -282,5 +282,49 @@ describe("runScheduleIngest — one sport failing does not block the others", ()
     await runScheduleIngest(provider);
 
     expect(captureMessageSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe("runScheduleIngest — grading integration (JAC-37-42)", () => {
+  it("voids ungraded picks for a game whose upsert just transitioned it to postponed", async () => {
+    const owner = await createTestUser();
+    const league = await createTestLeague(owner.id);
+    const member = await createTestLeagueMember(owner.id, league.id, { role: "commissioner" });
+    const testGame = await createTestGame({
+      externalId: "espn-postponed-grade",
+      sport: "nfl",
+      status: "scheduled",
+      startsAt: new Date("2026-09-13T17:00:00.000Z"),
+    });
+    const testPick = await createTestPick(member.id, testGame.id, { selectedTeam: "Home" });
+
+    const provider = new MockSportsProvider({
+      schedule: [scheduleEntry({ externalId: "espn-postponed-grade", status: "postponed" })],
+    });
+    await runScheduleIngest(provider);
+
+    const [pickRow] = await db.select().from(pick).where(eq(pick.id, testPick.id));
+    expect(pickRow!.outcome).toBe("void");
+  });
+
+  it("does not touch picks for games that stayed scheduled in the same upsert batch", async () => {
+    const owner = await createTestUser();
+    const league = await createTestLeague(owner.id);
+    const member = await createTestLeagueMember(owner.id, league.id, { role: "commissioner" });
+    const testGame = await createTestGame({
+      externalId: "espn-still-scheduled",
+      sport: "nfl",
+      status: "scheduled",
+      startsAt: new Date("2026-09-13T17:00:00.000Z"),
+    });
+    const testPick = await createTestPick(member.id, testGame.id, { selectedTeam: "Home" });
+
+    const provider = new MockSportsProvider({
+      schedule: [scheduleEntry({ externalId: "espn-still-scheduled", status: "scheduled" })],
+    });
+    await runScheduleIngest(provider);
+
+    const [pickRow] = await db.select().from(pick).where(eq(pick.id, testPick.id));
+    expect(pickRow!.outcome).toBeNull();
   });
 });

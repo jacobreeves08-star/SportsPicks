@@ -49,6 +49,34 @@ export async function voidGamePicks(gameId: string, executor: typeof db): Promis
 }
 
 /**
+ * Bulk variant of voidGamePicks for schedule-ingest's per-sport batch
+ * upsert — one statement voiding ungraded picks for any of the given
+ * game IDs that are CURRENTLY postponed/cancelled, matching the
+ * existing "one statement per sport, not per row" batching already
+ * used there. `sql.join(...)`, not a bare `${gameIds}` interpolation —
+ * drizzle's sql tag flattens a plain JS array into an IN-list of
+ * individually-parameterized values, not a single bound Postgres
+ * array (the same gotcha documented in leagues.routes.ts). A no-op for
+ * an empty array.
+ */
+export async function voidGamePicksForGames(gameIds: string[], executor: typeof db): Promise<void> {
+  if (gameIds.length === 0) return;
+  const gameIdsSql = sql.join(
+    gameIds.map((id) => sql`${id}`),
+    sql`, `,
+  );
+  await executor.execute(sql`
+    update pick p
+    set outcome = 'void', graded_at = now()
+    from game g
+    where p.game_id = g.id
+      and p.game_id in (${gameIdsSql})
+      and g.status in ('postponed', 'canceled')
+      and p.outcome is null
+  `);
+}
+
+/**
  * Re-grades EVERY win/loss pick on a game against a NEW winning team —
  * deliberately without the `outcome is null` guard, since a correction
  * is specifically about overwriting an already-graded outcome. Used

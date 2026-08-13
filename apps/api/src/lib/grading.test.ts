@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "../db/client.js";
-import { pick } from "../db/schema.js";
+import { game as gameTable, pick } from "../db/schema.js";
 import {
   createTestGame,
   createTestLeague,
@@ -10,7 +10,7 @@ import {
   createTestUser,
   truncateAllTables,
 } from "../db/test-helpers.js";
-import { gradeFinalGame, regradeGame, voidGamePicks } from "./grading.js";
+import { gradeFinalGame, regradeGame, voidGamePicks, voidGamePicksForGames } from "./grading.js";
 
 beforeEach(async () => {
   await truncateAllTables();
@@ -135,5 +135,37 @@ describe("grading multiple members on the same game — hand-verifiable scenario
 
     expect((await outcomeOf(pickA.id)).outcome).toBe("win");
     expect((await outcomeOf(pickB.id)).outcome).toBe("loss");
+  });
+});
+
+describe("voidGamePicksForGames", () => {
+  it("voids ungraded picks only for games that are CURRENTLY postponed/cancelled among the given IDs", async () => {
+    const { game: postponedGame, pick: postponedPick } = await setupPick("Bills", {});
+    await db.update(gameTable).set({ status: "postponed" }).where(eq(gameTable.id, postponedGame.id));
+
+    const { game: scheduledGame, pick: scheduledPick } = await setupPick("Bills", {});
+    // scheduledGame stays 'scheduled' — should NOT be voided even
+    // though its ID is included in the call.
+
+    await voidGamePicksForGames([postponedGame.id, scheduledGame.id], db);
+
+    expect((await outcomeOf(postponedPick.id)).outcome).toBe("void");
+    expect((await outcomeOf(scheduledPick.id)).outcome).toBeNull();
+  });
+
+  it("is a no-op for an empty array", async () => {
+    await expect(voidGamePicksForGames([], db)).resolves.not.toThrow();
+  });
+
+  it("is idempotent, same as the single-game version", async () => {
+    const { game, pick: p } = await setupPick("Bills", {});
+    await db.update(gameTable).set({ status: "canceled" }).where(eq(gameTable.id, game.id));
+
+    await voidGamePicksForGames([game.id], db);
+    const first = await outcomeOf(p.id);
+    await voidGamePicksForGames([game.id], db);
+    const second = await outcomeOf(p.id);
+
+    expect(second.gradedAt).toEqual(first.gradedAt);
   });
 });

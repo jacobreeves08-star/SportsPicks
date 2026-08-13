@@ -4,6 +4,7 @@ import { db } from "../db/client.js";
 import { game } from "../db/schema.js";
 import { captureException, captureMessage, initErrorTracking } from "../lib/error-tracking.js";
 import { env } from "../lib/env.js";
+import { voidGamePicksForGames } from "../lib/grading.js";
 import { pingHeartbeat } from "../lib/heartbeat.js";
 import { recordJobRun } from "../lib/job-run.js";
 import { logger } from "../lib/logger.js";
@@ -159,6 +160,22 @@ export async function runScheduleIngest(providerOverride?: SportsProvider): Prom
         .returning({ id: game.id });
 
       itemCount += rows.length;
+
+      // One statement per sport, not per row (JAC-37-42) — matching the
+      // upsert above's own batching. Voids ungraded picks for any of
+      // the JUST-touched games that are now postponed/cancelled;
+      // no-op for the rest (the WHERE inside checks CURRENT status, not
+      // whether this write's `status` value happened to be one of
+      // those). Postponed games also self-heal via the unbounded
+      // postponed-recovery pass above, keeping them in `rows` on every
+      // future run for as long as they stay postponed; the score-poll
+      // reconciliation sweep covers cancelled games once their date
+      // ages out of this job's lookback window. See
+      // docs/scoring-and-standings.md.
+      await voidGamePicksForGames(
+        rows.map((r) => r.id),
+        db,
+      );
     }
 
     if (itemCount === 0) {

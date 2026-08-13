@@ -1,6 +1,7 @@
+import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "./client.js";
-import { pick } from "./schema.js";
+import { game, pick } from "./schema.js";
 import { createTestGame, createTestLeague, createTestLeagueMember, createTestUser, truncateAllTables } from "./test-helpers.js";
 
 beforeEach(async () => {
@@ -82,5 +83,64 @@ describe("check_pick_selected_team trigger — draw support (JAC-20)", () => {
     await expect(
       db.insert(pick).values({ leagueMemberId: member.id, gameId: game.id, selectedTeam: "Bills" }),
     ).resolves.not.toThrow();
+  });
+});
+
+/**
+ * JAC-37-42, 0007_pick_trigger_column_scope.sql: the trigger used to be
+ * `before insert or update on pick` with no column qualifier, so it
+ * re-validated selected_team against game.home_team/away_team on EVERY
+ * update — including grading's `set outcome = ...`, which never
+ * touches selected_team. Discovered live: a team-name correction on
+ * re-ingest (Epic 3's documented, deliberate name-drift correction)
+ * landing on a game AFTER a pick was already made against the OLD name
+ * made grading that pick crash outright.
+ */
+describe("check_pick_selected_team trigger — column scope (JAC-37-42 regression)", () => {
+  it("an unrelated column update (e.g. grading) does not re-validate selected_team, even if the game's team names changed since the pick was made", async () => {
+    const owner = await createTestUser();
+    const league = await createTestLeague(owner.id);
+    const member = await createTestLeagueMember(owner.id, league.id);
+    const testGame = await createTestGame({ sport: "nfl", homeTeam: "Home", awayTeam: "Away" });
+    const [testPick] = await db
+      .insert(pick)
+      .values({ leagueMemberId: member.id, gameId: testGame.id, selectedTeam: "Home" })
+      .returning();
+
+    // A team-name correction lands on the game AFTER the pick was made
+    // — "Home" is no longer a participant name at all.
+    await db.update(game).set({ homeTeam: "Home Team", awayTeam: "Away Team" }).where(eq(game.id, testGame.id));
+
+    // Grading only ever touches outcome/graded_at — must not re-trigger
+    // participant validation against the now-stale selected_team.
+    await expect(
+      db.update(pick).set({ outcome: "win", gradedAt: new Date() }).where(eq(pick.id, testPick!.id)),
+    ).resolves.not.toThrow();
+  });
+
+  it("still validates on INSERT", async () => {
+    const owner = await createTestUser();
+    const league = await createTestLeague(owner.id);
+    const member = await createTestLeagueMember(owner.id, league.id);
+    const testGame = await createTestGame({ sport: "nfl", homeTeam: "Bills", awayTeam: "Jets" });
+
+    await expect(
+      db.insert(pick).values({ leagueMemberId: member.id, gameId: testGame.id, selectedTeam: "Cowboys" }),
+    ).rejects.toThrow();
+  });
+
+  it("still validates when selected_team ITSELF is the column being changed (a real pick change, not a grading write)", async () => {
+    const owner = await createTestUser();
+    const league = await createTestLeague(owner.id);
+    const member = await createTestLeagueMember(owner.id, league.id);
+    const testGame = await createTestGame({ sport: "nfl", homeTeam: "Bills", awayTeam: "Jets" });
+    const [testPick] = await db
+      .insert(pick)
+      .values({ leagueMemberId: member.id, gameId: testGame.id, selectedTeam: "Bills" })
+      .returning();
+
+    await expect(
+      db.update(pick).set({ selectedTeam: "Cowboys" }).where(eq(pick.id, testPick!.id)),
+    ).rejects.toThrow();
   });
 });
