@@ -1,13 +1,14 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
+import { QueryProvider } from "./query/query-provider.js";
 
 /**
  * Entry point for infrastructure verification only — Epics 9-11 build
  * the real screens. Wired up incrementally as this epic's modules
- * land (the query client + provider in query/, the router in
- * routes/), each replacing this file's contents as it becomes
- * available, so every commit in this epic stays in a runnable state
- * rather than referencing pieces that don't exist yet.
+ * land (the router in routes/ still to come), each replacing this
+ * file's contents as it becomes available, so every commit in this
+ * epic stays in a runnable state rather than referencing pieces that
+ * don't exist yet.
  */
 function InfrastructureStatus() {
   return (
@@ -25,6 +26,8 @@ if (!rootElement) {
 
 createRoot(rootElement).render(
   <StrictMode>
-    <InfrastructureStatus />
+    <QueryProvider>
+      <InfrastructureStatus />
+    </QueryProvider>
   </StrictMode>,
 );
