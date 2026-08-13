@@ -45,6 +45,10 @@ export const user = pgTable(
     deletionRequestedAt: timestamp("deletion_requested_at", { withTimezone: true }),
     scheduledDeletionAt: timestamp("scheduled_deletion_at", { withTimezone: true }),
     anonymizedAt: timestamp("anonymized_at", { withTimezone: true }),
+    // Global notifications off switch (JAC-43-48) — checked first,
+    // short-circuits regardless of any per-league league_member
+    // preference. See docs/notifications.md.
+    notificationsEnabled: boolean("notifications_enabled").notNull().default(true),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -90,6 +94,10 @@ export const leagueMember = pgTable(
     // rejoin to reactivate THIS row rather than insert a new one, which
     // is what makes "rejoining restores prior picks" true for free.
     leftAt: timestamp("left_at", { withTimezone: true }),
+    // Per-league notification preference (JAC-43-48) — see
+    // docs/notifications.md. user.notificationsEnabled is checked
+    // first and short-circuits regardless of this.
+    notificationsEnabled: boolean("notifications_enabled").notNull().default(true),
   },
   (t) => [
     unique("league_member_user_league_unique").on(t.userId, t.leagueId),
@@ -333,6 +341,60 @@ export const verificationToken = pgTable(
       sql`${t.purpose} in ('email_verify', 'email_change', 'password_reset')`,
     ),
     index("verification_token_user_purpose_idx").on(t.userId, t.purpose),
+  ],
+);
+
+// Push-token registration contract (JAC-43-48) — documented but not
+// wired to a live route this epic (no native client exists in this
+// repo to register one; email is the only delivery channel built).
+// See docs/notifications.md. Deleted outright (not anonymized) by
+// anonymize-accounts.ts, same category as session/verification_token.
+export const pushToken = pgTable(
+  "push_token",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => user.id),
+    token: text("token").notNull().unique(),
+    platform: text("platform").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    check("push_token_platform_check", sql`${t.platform} in ('ios', 'android', 'web')`),
+    index("push_token_user_id_idx").on(t.userId),
+  ],
+);
+
+// Idempotency guard for the pick-reminder and results-summary jobs
+// (JAC-43-48) — deliberately its own table, not reused from
+// analytics_event or any other log, so this table's schema isn't
+// constrained by an unrelated concern. See docs/notifications.md. The
+// unique index is what makes "reserve, then send only if the insert
+// actually returned a row" work as one atomic statement, the same
+// idiom score-poll.ts already uses for exactly-once finalization.
+export const notificationLog = pgTable(
+  "notification_log",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    notificationType: text("notification_type").notNull(),
+    leagueId: uuid("league_id")
+      .notNull()
+      .references(() => league.id),
+    leagueMemberId: uuid("league_member_id")
+      .notNull()
+      .references(() => leagueMember.id),
+    notificationDate: date("notification_date").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    check(
+      "notification_log_type_check",
+      sql`${t.notificationType} in ('pick_reminder', 'results_summary')`,
+    ),
+    uniqueIndex("notification_log_dedupe_idx").on(t.notificationType, t.leagueMemberId, t.notificationDate),
+    index("notification_log_league_id_idx").on(t.leagueId),
   ],
 );
 

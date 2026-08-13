@@ -6,8 +6,10 @@ import {
   leagueInviteCode,
   leagueMember,
   leagueMemberReport,
+  notificationLog,
   pick,
   pickAuditLog,
+  pushToken,
   resultCorrection,
   user,
 } from "./schema.js";
@@ -31,7 +33,7 @@ function firstOrThrow<T>(rows: T[]): T {
  */
 export async function truncateAllTables(): Promise<void> {
   await db.execute(
-    `truncate table "user", league, league_member, league_invite_code, league_member_report, game, pick, pick_audit_log, result, result_correction, session, verification_token, job_run restart identity cascade`,
+    `truncate table "user", league, league_member, league_invite_code, league_member_report, game, pick, pick_audit_log, result, result_correction, session, verification_token, job_run, push_token, notification_log restart identity cascade`,
   );
 }
 
@@ -151,6 +153,35 @@ export async function createTestResultCorrection(
   const rows = await db
     .insert(resultCorrection)
     .values({ gameId, oldWinningTeam: "Home", newWinningTeam: "Away", source: "manual", ...overrides })
+    .returning();
+  return firstOrThrow(rows);
+}
+
+let pushTokenCounter = 0;
+
+export async function createTestPushToken(userId: string, overrides: Partial<typeof pushToken.$inferInsert> = {}) {
+  pushTokenCounter += 1;
+  const rows = await db
+    .insert(pushToken)
+    .values({ userId, token: `test-push-token-${pushTokenCounter}`, platform: "ios", ...overrides })
+    .returning();
+  return firstOrThrow(rows);
+}
+
+export async function createTestNotificationLog(
+  leagueId: string,
+  leagueMemberId: string,
+  overrides: Partial<typeof notificationLog.$inferInsert> = {},
+) {
+  const rows = await db
+    .insert(notificationLog)
+    .values({
+      leagueId,
+      leagueMemberId,
+      notificationType: "pick_reminder",
+      notificationDate: new Date().toISOString().slice(0, 10),
+      ...overrides,
+    })
     .returning();
   return firstOrThrow(rows);
 }
