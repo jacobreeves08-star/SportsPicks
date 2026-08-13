@@ -57,8 +57,11 @@ Codes in use today:
 | `GAME_CANCELED` | 409 | The game was canceled; no picks are ever accepted against it |
 | `GAME_POSTPONED` | 409 | The game was postponed; picks reopen once schedule-ingest finds a real new time |
 | `INVALID_TEAM_SELECTION` | 400 | `selectedTeam` isn't one of the game's two teams (or `'DRAW'` when the game doesn't allow it) |
+| `GAME_NOT_FOUND` | 404 | `correct-result`'s `:gameId` doesn't exist, or its sport isn't part of the requesting league (JAC-37-42) |
+| `RESULT_NOT_FOUND` | 404 | `correct-result` targets a game with no `result` yet — corrects an existing result, doesn't grade a new one |
+| `NO_CHANGE` | 400 | `correct-result`'s `winningTeam` matches the current result — a no-op correction is rejected rather than recorded |
 
-Offensive league-name rejection reuses `VALIDATION_ERROR` (`fields: [{ field: "name", ... }]`) rather than a bespoke code — same pattern as timezone validation in `users.routes.ts`/`auth.routes.ts`. A pick write against a nonexistent game, or a game whose sport isn't part of the league, also reuses `VALIDATION_ERROR` for the same reason — a malformed/invalid reference, not a distinct business rule the client needs to branch on differently. `PICK_LOCKED`/`GAME_CANCELED`/`GAME_POSTPONED`/`INVALID_TEAM_SELECTION` each get their own code because they *are* — see `apps/api/src/lib/pick-write.ts`'s `rejectionToApiError`.
+Offensive league-name rejection reuses `VALIDATION_ERROR` (`fields: [{ field: "name", ... }]`) rather than a bespoke code — same pattern as timezone validation in `users.routes.ts`/`auth.routes.ts`. A pick write against a nonexistent game, or a game whose sport isn't part of the league, also reuses `VALIDATION_ERROR` for the same reason — a malformed/invalid reference, not a distinct business rule the client needs to branch on differently. `PICK_LOCKED`/`GAME_CANCELED`/`GAME_POSTPONED`/`INVALID_TEAM_SELECTION` each get their own code because they *are* — see `apps/api/src/lib/pick-write.ts`'s `rejectionToApiError`. `correct-result`'s `winningTeam` failing the same "must be one of the game's two teams (or `'DRAW'`)" check also reuses `VALIDATION_ERROR`, for the identical reason.
 
 ## Authentication
 

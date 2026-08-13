@@ -103,6 +103,11 @@ async function main() {
 
   // Alice picks the actual winner every time; Bob picks the home team
   // every time — gives a deterministic, non-trivial standings comparison.
+  // Graded (outcome/graded_at set) at insert time, same as lib/grading.ts
+  // would produce — every game above is already final, and standings
+  // (JAC-37-42) read pick.outcome directly, never re-deriving it from
+  // `result` on every read.
+  const gradedAt = new Date();
   await db
     .insert(pick)
     .values([
@@ -110,11 +115,15 @@ async function main() {
         leagueMemberId: ALICE_MEMBERSHIP_ID,
         gameId: g.id,
         selectedTeam: g.winner,
+        outcome: "win" as const,
+        gradedAt,
       })),
       ...games.map((g) => ({
         leagueMemberId: BOB_MEMBERSHIP_ID,
         gameId: g.id,
         selectedTeam: g.home,
+        outcome: g.home === g.winner ? ("win" as const) : ("loss" as const),
+        gradedAt,
       })),
     ])
     .onConflictDoNothing();

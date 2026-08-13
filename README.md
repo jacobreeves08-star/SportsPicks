@@ -2,7 +2,7 @@
 
 Daily straight-up picks against the spread of nothing — just who wins. Friends compare records inside leagues.
 
-This repo covers foundations (repo, data model, CI, environments, observability, API conventions), authentication & identity (signup/login/sessions, email verification and password reset, profile management, the authorization layer, self-serve deletion), the sports data pipeline (schedule ingest, score polling, edge-case handling, failure alerting), leagues & membership (create/join/leave, invite codes, commissioner controls, the multi-league home screen), and picks & lock enforcement (the daily slate, single/batch pick writes, server-enforced locking at game start, pick privacy, an append-only audit trail).
+This repo covers foundations (repo, data model, CI, environments, observability, API conventions), authentication & identity (signup/login/sessions, email verification and password reset, profile management, the authorization layer, self-serve deletion), the sports data pipeline (schedule ingest, score polling, edge-case handling, failure alerting), leagues & membership (create/join/leave, invite codes, commissioner controls, the multi-league home screen), picks & lock enforcement (the daily slate, single/batch pick writes, server-enforced locking at game start, pick privacy, an append-only audit trail), and scoring & standings (idempotent grading, ranked standings with a full tiebreaker chain, automatic and manual result correction, head-to-head comparison).
 
 ## Stack
 
@@ -77,6 +77,10 @@ Creating a league, invite codes (generation, rotation, rate-limited redemption),
 ## Picks & lock enforcement
 
 The daily slate (day boundaries in the league's timezone), single and batch pick writes, why lock enforcement is safe against a rescheduled game and a manipulated client clock alike, per-game independence in the batch endpoint, server-side pick privacy, and the append-only pick audit trail are documented in [`docs/picks-and-locking.md`](docs/picks-and-locking.md).
+
+## Scoring & standings
+
+Idempotent grading (one point per correct winner, postponed/cancelled games voided for everyone), the fixed Tuesday–Monday week and full deterministic tiebreaker chain, automatic and manual result correction, and the standings/head-to-head API contract are documented in [`docs/scoring-and-standings.md`](docs/scoring-and-standings.md).
 
 ## Branching & contributing
 

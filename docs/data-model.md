@@ -1,4 +1,4 @@
-# Data model (JAC-8, extended by JAC-13–18, JAC-19–24, JAC-25–30, JAC-31–36)
+# Data model (JAC-8, extended by JAC-13–18, JAC-19–24, JAC-25–30, JAC-31–36, JAC-37–42)
 
 Source of truth: [`apps/api/src/db/schema.ts`](../apps/api/src/db/schema.ts) (Drizzle) and the migrations in [`apps/api/src/db/migrations/`](../apps/api/src/db/migrations/) (hand-written; see note below on why).
 
@@ -91,6 +91,11 @@ pick
   game_id          -> game.id
   selected_team    -- team name, or the literal 'DRAW' sentinel (soccer only, see game.allows_draw)
   created_at
+  outcome (nullable)      -- ('win'|'loss'|'void'), JAC-37-42 — graded once at write time by
+                           -- lib/grading.ts; standings read this directly, never re-deriving it
+                           -- from `result` on every read. Null until graded. 'void' for a
+                           -- postponed/cancelled game: never counted as a loss.
+  graded_at (nullable)
   UNIQUE (league_member_id, game_id)
 
 result                   -- SEPARATE from game; corrections are UPDATEs
@@ -99,7 +104,18 @@ result                   -- SEPARATE from game; corrections are UPDATEs
   winning_team            -- team name, or the literal 'DRAW' sentinel for a level soccer final
   source                  -- literal 'espn' from the pipeline; 'manual:commissioner' or 'seed' otherwise
   revision_count          -- auto-incremented by trigger when winning_team changes
-  created_at / updated_at
+  created_at / updated_at  -- created_at is the safe "when did this finalize" signal (JAC-37-42);
+                            -- updated_at is bumped by ANY column change, including a correction
+
+result_correction         -- audit trail for a revised result (JAC-37-42); see docs/scoring-and-standings.md
+  id (uuid, pk)
+  game_id -> game.id
+  old_winning_team / new_winning_team
+  source                  -- ('provider_revision' | 'manual')
+  corrected_by_user_id (nullable)   -> user.id     -- set only for a manual correction
+  corrected_from_league_id (nullable) -> league.id -- set only for a manual correction
+  reason (nullable)       -- required by the API for a manual correction, not an automatic one
+  created_at
 
 pick_audit_log            -- APPEND-ONLY (JAC-31-36); never updated or deleted by application
                            -- code, backstopped by DB triggers that unconditionally reject both
@@ -126,6 +142,7 @@ job_run                  -- cross-run memory for stateless cron-triggered jobs (
 - **`UNIQUE (league_member, game)` on pick:** `pick_league_member_game_unique`.
 - **`result` separate from `game`, corrections audited, not destructive:** `result` is its own table; a `BEFORE UPDATE` trigger (`bump_result_revision`) increments `revision_count` whenever `winning_team` changes and bumps `updated_at`. Corrections are `UPDATE result SET winning_team = ...`, never a delete/reinsert or a write to `game`.
 - **Game exists once globally, never duplicated per league:** there is no per-league game/join table. A league's slate is computed as "games where `game.sport` is in `league.sports`" (scoped further by date at query time) — a pick still ties a specific `league_member` to a specific global `game` row via `pick.game_id`.
+- **Grading twice cannot double-count (JAC-37-42):** every grading/voiding `UPDATE` is gated by `WHERE pick.outcome IS NULL` — a second call for the same game matches zero rows by construction, not because of a lock or a separate check. See `docs/scoring-and-standings.md`.
 
 ## Decisions made beyond the literal spec (flagging for your review)
 
@@ -145,6 +162,11 @@ job_run                  -- cross-run memory for stateless cron-triggered jobs (
 14. **No ban/block-rejoin list (JAC-25-30)** — a member removed by the commissioner can rejoin via the invite code exactly like anyone else; removal stops participation *now*, it isn't a ban. A real moderation/ban feature isn't in the literal spec; `league_member_report` gives the commissioner visibility without building one.
 15. **`pick_audit_log` is a genuinely separate table from `pick`, not a history/versioning extension bolted onto `pick` itself (JAC-31-36)** — `pick` still holds exactly one row per (member, game), the member's CURRENT selection, exactly as originally specified; `pick_audit_log` is an independent, append-only stream of every write attempt that succeeded, including the ones later overwritten by a change. This is the literal ask ("append-only log... never mutated or deleted"), and keeping it structurally separate from `pick` means `pick`'s own semantics (one current selection, upsertable) never had to change to accommodate it.
 16. **`pick_audit_log` immutability is enforced by `BEFORE UPDATE`/`BEFORE DELETE` triggers, not a `REVOKE` on the app's DB role** — this app connects as a single table-owning role (no separate least-privilege application role exists anywhere in this codebase), and a table's owner bypasses ordinary `GRANT`/`REVOKE` privilege checks in Postgres. Making `REVOKE` actually bite would need a second, non-owner DB role — real new infrastructure, not a migration-only change — so the trigger approach (already used for `check_pick_selected_team` and the commissioner invariant) was the right fit, not a compromise.
+17. **`pick.outcome`/`graded_at`, not a re-derived-at-read-time computation (JAC-37-42)** — the literal ask ("standings are read constantly and graded once; do the work at write time"). A partial index, `pick_ungraded_idx on pick(game_id) WHERE outcome IS NULL`, serves both the grading write's idempotency guard and score-poll's reconciliation sweep, and stays cheap as history accumulates since most picks are graded.
+18. **`result_correction` is a new table, not an extension of `result`'s existing `revision_count`** — `revision_count` (JAC-19-24) is a plain counter with no history of *what* changed; `result_correction` is the "notify affected members that their record changed and why" record the requirement asks for, following the same documented-queryable-record pattern already used for `league_member_report` — no push-notification delivery system exists yet (that's Epic 7), so this is a queryable history instead, with the correction endpoint's own response including the affected members directly for the commissioner who triggered it.
+19. **`0007_pick_trigger_column_scope.sql` narrows `check_pick_selected_team` from `BEFORE INSERT OR UPDATE` to `BEFORE INSERT OR UPDATE OF selected_team`** — a real bug fix, not a preemptive one: the un-scoped trigger re-validated `selected_team` on every `pick` update, including grading's `outcome`/`graded_at`-only writes, and would crash grading a pick made against a team name later corrected by re-ingest (an Epic 3-deliberate, real scenario). See `docs/scoring-and-standings.md`.
+20. **A scoped `REPEATABLE READ` transaction for the standings tiebreaker computation (JAC-37-42)** — the app's default isolation is READ COMMITTED everywhere else (`lib/pick-write.ts` relies on that directly for its own reasons); this is a narrow, documented exception for the one place two reads (the base standings query and the head-to-head follow-up) need to see the same snapshot to produce a consistent tiebreak.
+21. **Manual result correction can affect leagues beyond the commissioner's own (JAC-37-42), accepted rather than newly permissioned** — `game`/`result` are global (one row per game, shared across every league covering that sport, since Epic 1), so a commissioner correcting a result they have authority over in their own league can change standings in an unrelated league sharing that same game. No platform-admin role or narrower permission model was built to prevent this — real scope creep beyond this epic — mitigated instead via full attribution and a member-visible (not commissioner-only) correction history. See `docs/scoring-and-standings.md`.
 
 ## Migration tooling note
 
@@ -152,4 +174,4 @@ job_run                  -- cross-run memory for stateless cron-triggered jobs (
 
 ## Seed data (`apps/api/src/db/seed.ts`)
 
-2 users (Alice, Bob) in one league ("Foundations Test League", NFL), a 3-game slate that's already `final` with graded `result` rows, and 6 picks (Alice always picks the actual winner, Bob always picks the home team) — enough to produce a non-trivial standings comparison once that feature exists. Uses fixed UUIDs and `onConflictDoNothing`, so it's safe to re-run.
+2 users (Alice, Bob) in one league ("Foundations Test League", NFL), a 3-game slate that's already `final` with graded `result` rows, and 6 picks (Alice always picks the actual winner, Bob always picks the home team), each inserted with `outcome`/`graded_at` already set (JAC-37-42) — a non-trivial standings comparison out of the box, not just raw picks waiting to be graded. Uses fixed UUIDs and `onConflictDoNothing`, so it's safe to re-run.
