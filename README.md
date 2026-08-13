@@ -2,13 +2,13 @@
 
 Daily straight-up picks against the spread of nothing — just who wins. Friends compare records inside leagues.
 
-This repo covers foundations (repo, data model, CI, environments, observability, API conventions), authentication & identity (signup/login/sessions, email verification and password reset, profile management, the authorization layer, self-serve deletion), the sports data pipeline (schedule ingest, score polling, edge-case handling, failure alerting), leagues & membership (create/join/leave, invite codes, commissioner controls, the multi-league home screen), picks & lock enforcement (the daily slate, single/batch pick writes, server-enforced locking at game start, pick privacy, an append-only audit trail), and scoring & standings (idempotent grading, ranked standings with a full tiebreaker chain, automatic and manual result correction, head-to-head comparison).
+This repo covers foundations (repo, data model, CI, environments, observability, API conventions), authentication & identity (signup/login/sessions, email verification and password reset, profile management, the authorization layer, self-serve deletion), the sports data pipeline (schedule ingest, score polling, edge-case handling, failure alerting), leagues & membership (create/join/leave, invite codes, commissioner controls, the multi-league home screen), picks & lock enforcement (the daily slate, single/batch pick writes, server-enforced locking at game start, pick privacy, an append-only audit trail), scoring & standings (idempotent grading, ranked standings with a full tiebreaker chain, automatic and manual result correction, head-to-head comparison), and launch readiness (pick-reminder and results-summary email notifications, self-built server-side analytics, layered rate limiting and slate-response caching, closed-beta operator observability, an accessibility spec, and draft legal documents).
 
 ## Stack
 
 - **Runtime:** Node.js 20 + TypeScript, [Fastify](https://fastify.dev/)
 - **Database:** PostgreSQL, via [Drizzle ORM](https://orm.drizzle.team/)
-- **Scheduling:** Render Cron Jobs (schedule ingest, score polling, account anonymization)
+- **Scheduling:** Render Cron Jobs (schedule ingest, score polling, account anonymization, pick reminders, results summaries, the daily operator digest)
 - **Sports data:** ESPN's public site API (free, unauthenticated, no contract) — see [`docs/adr/0003-sports-data-pipeline.md`](docs/adr/0003-sports-data-pipeline.md) and [`docs/sports-pipeline.md`](docs/sports-pipeline.md).
 - **Timezones:** [Luxon](https://moment.github.io/luxon/) — all storage/business logic in UTC, conversion only at presentation. See [`docs/adr/0001-stack-selection.md`](docs/adr/0001-stack-selection.md) for the full rationale.
 - **Auth:** opaque DB-backed access/refresh tokens (not JWT), Argon2id password hashing, Resend for transactional email. See [`docs/adr/0002-auth-session-hashing-email.md`](docs/adr/0002-auth-session-hashing-email.md).
@@ -40,6 +40,9 @@ To run a scheduled job manually (same commands Render's Cron Jobs run on a sched
 npm run schedule-ingest --workspace apps/api
 npm run score-poll --workspace apps/api
 npm run anonymize-accounts --workspace apps/api
+npm run pick-reminder --workspace apps/api
+npm run results-summary --workspace apps/api
+npm run operator-digest --workspace apps/api
 ```
 
 ## Repo layout
@@ -47,6 +50,7 @@ npm run anonymize-accounts --workspace apps/api
 ```
 apps/api/           Fastify API (routes, auth, authorization), scheduled jobs, DB schema/migrations/seed
 docs/adr/            Architecture decision records
+docs/legal/          Draft Terms of Service and Privacy Policy — NOT reviewed by counsel
 render.yaml           Render service definitions (web, cron, postgres) per environment
 ```
 
@@ -81,6 +85,10 @@ The daily slate (day boundaries in the league's timezone), single and batch pick
 ## Scoring & standings
 
 Idempotent grading (one point per correct winner, postponed/cancelled games voided for everyone), the fixed Tuesday–Monday week and full deterministic tiebreaker chain, automatic and manual result correction, and the standings/head-to-head API contract are documented in [`docs/scoring-and-standings.md`](docs/scoring-and-standings.md).
+
+## Launch readiness
+
+Pick-reminder and results-summary email notifications (idempotent per-member send, notification preferences, the DST-aware day-window logic), self-built server-side analytics (event log plus the ground-truth slate-completion-rate metric), layered rate limiting (per-account, per-route, signup bot protection) and slate-response caching, and closed-beta operator observability (`getOpsSummary()`, the enriched `/health/data-freshness`, and the daily operator digest email) are documented in [`docs/notifications.md`](docs/notifications.md), [`docs/analytics.md`](docs/analytics.md), and [`docs/rate-limiting-and-caching.md`](docs/rate-limiting-and-caching.md). The accessibility and responsive-design contract for a future frontend is in [`docs/accessibility-and-responsive.md`](docs/accessibility-and-responsive.md). Draft Terms of Service and Privacy Policy — **not reviewed by counsel, not for real use** — are in [`docs/legal/`](docs/legal/); the Privacy Policy's data-retention section is required to match [`docs/account-anonymization.md`](docs/account-anonymization.md) exactly.
 
 ## Branching & contributing
 
