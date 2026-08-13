@@ -1,0 +1,30 @@
+.spinner {
+  display: inline-flex;
+}
+
+.spin {
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Same dual-trigger convention as tokens.css's --motion-duration
+   overrides: the real OS media query AND Storybook's manual toggle
+   both land here, since an infinite keyframe animation isn't
+   expressible through the --motion-duration-* tokens alone (those
+   are sized for one-shot transitions, not a continuous loop). */
+@media (prefers-reduced-motion: reduce) {
+  .spin {
+    animation: none;
+  }
+}
+:global([data-motion="reduce"]) .spin {
+  animation: none;
+}

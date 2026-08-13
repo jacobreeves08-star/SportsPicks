@@ -1,0 +1,7 @@
+.badge {
+  display: inline-flex;
+}
+
+.icon {
+  color: var(--color-state-locked);
+}

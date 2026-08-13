@@ -1,0 +1,39 @@
+.row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.bar {
+  height: 14px;
+  border-radius: var(--radius-sm);
+  background-color: var(--color-border);
+  opacity: 0.5;
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 0.65;
+  }
+}
+
+/* Same dual-trigger reduced-motion convention as Spinner.module.css —
+   an infinite pulse isn't expressible via the --motion-duration
+   tokens alone. Reduced motion keeps the bars visible at a static
+   mid-opacity rather than frozen at whatever phase the animation
+   happened to stop on. */
+@media (prefers-reduced-motion: reduce) {
+  .bar {
+    animation: none;
+    opacity: 0.5;
+  }
+}
+:global([data-motion="reduce"]) .bar {
+  animation: none;
+  opacity: 0.5;
+}

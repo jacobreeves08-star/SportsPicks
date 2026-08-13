@@ -1,0 +1,99 @@
+/**
+ * The single source of truth for every hex/px value the design system
+ * uses (Epic 9 brief: "restyling the results view must not require
+ * finding 'green' in four files"). Every color here is verified to
+ * meet WCAG AA against the surface it's meant to sit on by
+ * contrast.test.ts, which PARSES THIS FILE directly — there is no
+ * second, hand-maintained value table anywhere else. Change a hex here
+ * and the test tells you immediately if it broke a contrast guarantee.
+ *
+ * Tokens are named by MEANING, never by hue — `--color-result-miss`,
+ * not `--color-red`. A future re-theme only ever touches this file.
+ */
+:root {
+  /* Surfaces */
+  --color-surface: #f4f5f7;
+  --color-surface-raised: #ffffff;
+  --color-border: #7c8494;
+
+  /* Text */
+  --color-text: #14181f;
+  --color-text-dim: #5a6270;
+
+  /* Semantic state/result colors — each is paired with a non-color
+     signal (icon/weight/text) by the component that uses it; see
+     indicators/. Never rely on hue alone anywhere in this app. */
+  --color-pick-mine: #2453ff;
+  --color-result-hit: #1b7a3d;
+  --color-result-miss: #b3261e;
+  --color-state-locked: #8a5a00;
+  --color-state-open: #157a6e;
+  --color-state-stale: #47536b;
+
+  /* Not one of the Epic 9 brief's named tokens, added deliberately:
+     ErrorState (a failed request/fetch) is a different CONCEPT from
+     `--color-result-miss` (a correctly-graded losing pick), even
+     though they start out the same hue — "named by meaning, never by
+     hue" cuts both ways. Keeping them separate tokens means a future
+     re-theme of "what red means for a network error" can diverge from
+     "what red means for a wrong pick" without a collateral change. */
+  --color-error: #b3261e;
+
+  /* Focus */
+  --color-focus-ring: #2453ff;
+
+  /* Spacing — 4px base, widening at the top (matches how this app's
+     rows/sections actually grow, not a pure linear multiple). */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+
+  /* Radius */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 16px;
+  --radius-full: 9999px;
+
+  /* Elevation — box-shadow tokens, not raw shadow values inline
+     anywhere else. */
+  --elevation-0: none;
+  --elevation-1: 0 1px 2px rgba(20, 24, 31, 0.08), 0 1px 1px rgba(20, 24, 31, 0.04);
+  --elevation-2: 0 4px 12px rgba(20, 24, 31, 0.12);
+
+  /* Motion — every transition in the design system reads these
+     instead of a literal duration, so both triggers below can zero
+     them out in one place. */
+  --motion-duration-fast: 120ms;
+  --motion-duration-base: 200ms;
+}
+
+/**
+ * The real OS-level signal. `use-reduced-motion.ts`'s hook exists for
+ * components that need to branch logic (e.g. skip an animation
+ * entirely rather than just speed it to 0ms), but most components
+ * don't need JS at all — they read `--motion-duration-*` and this
+ * media query alone makes them instant.
+ */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-duration-fast: 0ms;
+    --motion-duration-base: 0ms;
+  }
+}
+
+/**
+ * The manual trigger — Storybook's reduced-motion toolbar toggle
+ * (.storybook/preview.ts) sets this attribute so a reviewer can
+ * preview the reduced-motion path without changing OS settings. Same
+ * variables, same effect, just a second way in — never a parallel
+ * "storybook-only" motion system that could drift from the real one.
+ */
+[data-motion="reduce"] {
+  --motion-duration-fast: 0ms;
+  --motion-duration-base: 0ms;
+}

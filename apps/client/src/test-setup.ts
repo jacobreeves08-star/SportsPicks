@@ -1,5 +1,7 @@
+import "@testing-library/jest-dom/vitest";
 import { cleanup } from "@testing-library/react";
-import { afterEach } from "vitest";
+import { toHaveNoViolations } from "jest-axe";
+import { afterEach, expect } from "vitest";
 
 /**
  * Global test setup (vite.config.ts's `test.setupFiles`). This repo
@@ -20,3 +22,17 @@ import { afterEach } from "vitest";
 afterEach(() => {
   cleanup();
 });
+
+/**
+ * `toHaveNoViolations()` for every design-system component test
+ * (Epic 9). `vitest-axe` (the vitest-native package) was tried first
+ * and rejected: its matcher genuinely doesn't register against this
+ * repo's Vitest 4 — `expect(results).toHaveNoViolations()` threw
+ * "Invalid Chai property," confirmed empirically with a throwaway
+ * smoke test before committing to a package. `jest-axe`'s matcher is
+ * just a plain object handed to `expect.extend`, with no runtime
+ * coupling to Jest itself, and it registers cleanly here — same
+ * "verify at install time, don't assume the peer range" discipline
+ * this repo has already applied to every other library choice.
+ */
+expect.extend(toHaveNoViolations);

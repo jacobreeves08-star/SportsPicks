@@ -17,7 +17,7 @@
 `main` should be a protected branch on GitHub with, at minimum:
 
 - Require a pull request before merging (no direct pushes, including for admins)
-- Require status checks to pass before merging: `lint`, `typecheck`, `test`
+- Require status checks to pass before merging: `lint`, `typecheck`, `test`, `client`
 - Require branches to be up to date before merging
 - Require at least 1 approval (adjust to 0 if you're the sole reviewer, but keep the PR requirement)
 
@@ -31,6 +31,7 @@ gh api repos/<org>/sports-pickem/branches/main/protection \
   -f 'required_status_checks.contexts[]=lint' \
   -f 'required_status_checks.contexts[]=typecheck' \
   -f 'required_status_checks.contexts[]=test' \
+  -f 'required_status_checks.contexts[]=client' \
   -f enforce_admins=true \
   -f required_pull_request_reviews.required_approving_review_count=0 \
   -f restrictions=null

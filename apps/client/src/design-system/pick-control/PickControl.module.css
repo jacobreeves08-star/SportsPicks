@@ -1,0 +1,71 @@
+.pickControl {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.sides {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: var(--space-2);
+}
+
+/* One-thumb tap target (a11y doc: ~44x44pt minimum, with spacing
+   between sides so a mis-tap doesn't select the wrong team). */
+.side {
+  appearance: none;
+  box-sizing: border-box;
+  min-height: 56px;
+  padding: var(--space-3) var(--space-2);
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface-raised);
+  color: var(--color-text);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: center;
+}
+
+.side:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+/* pick-mine: border weight/color change, not color alone — the
+   selected side also carries a bold label weight already applied
+   above, giving a second, non-color signal. */
+.sideSelected {
+  border-color: var(--color-pick-mine);
+  border-width: 3px;
+  color: var(--color-pick-mine);
+}
+
+/* Locked/final/void sides stay FOCUSABLE (aria-disabled, never the
+   native `disabled` attribute — see PickControl.tsx) but read as
+   visually inert and don't respond to pointer activation. */
+.sideInert {
+  cursor: default;
+  opacity: 0.75;
+}
+
+.sideWinner {
+  border-color: var(--color-result-hit);
+}
+
+.statusRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.rejectionMessage {
+  border: 1px solid var(--color-error);
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
+}
+
+.queuedMarker {
+  color: var(--color-text-dim);
+}

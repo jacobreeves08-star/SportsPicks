@@ -1,0 +1,10 @@
+.badge {
+  display: inline-flex;
+}
+
+.icon-hit {
+  color: var(--color-result-hit);
+}
+.icon-miss {
+  color: var(--color-result-miss);
+}

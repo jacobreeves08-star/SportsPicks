@@ -1,0 +1,20 @@
+/**
+ * The standard "sr-only" technique — visually removed but still
+ * present for assistive tech (unlike `display: none`, which is
+ * removed from the accessibility tree entirely). Shared by any
+ * component that needs a screen-reader-only text alternative
+ * alongside a visual one — Countdown's coarse "locks in about N
+ * minutes" label and PickControl's internal live region both use
+ * this exact class, deliberately not two separate implementations.
+ */
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

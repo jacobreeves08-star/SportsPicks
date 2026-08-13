@@ -1,0 +1,70 @@
+.text {
+  margin: 0;
+  font-family: inherit;
+}
+
+.size-xs {
+  font-size: 12px;
+  line-height: 16px;
+}
+.size-sm {
+  font-size: 14px;
+  line-height: 20px;
+}
+.size-md {
+  font-size: 16px;
+  line-height: 24px;
+}
+.size-lg {
+  font-size: 20px;
+  line-height: 28px;
+}
+.size-xl {
+  font-size: 28px;
+  line-height: 36px;
+}
+
+.weight-regular {
+  font-weight: 400;
+}
+.weight-medium {
+  font-weight: 600;
+}
+.weight-bold {
+  font-weight: 700;
+}
+
+.color-default {
+  color: var(--color-text);
+}
+.color-dim {
+  color: var(--color-text-dim);
+}
+.color-pick-mine {
+  color: var(--color-pick-mine);
+}
+.color-hit {
+  color: var(--color-result-hit);
+}
+.color-miss {
+  color: var(--color-result-miss);
+}
+.color-locked {
+  color: var(--color-state-locked);
+}
+.color-open {
+  color: var(--color-state-open);
+}
+.color-stale {
+  color: var(--color-state-stale);
+}
+.color-error {
+  color: var(--color-error);
+}
+
+/* Epic 9 brief: tabular numerals on every record/score/rank/countdown
+   — proportional figures make a ticking countdown jitter and a
+   standings column fail to align. */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
