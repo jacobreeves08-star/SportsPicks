@@ -270,10 +270,17 @@ export async function leaguesRoutes(app: FastifyInstance): Promise<void> {
       from member_records
     `);
 
+    // NOTE: db.execute()'s raw path returns timestamptz columns as
+    // Postgres's text representation, not a JS Date (confirmed
+    // empirically — see docs/scoring-and-standings.md's engineering
+    // note) — next_lock_at is converted below. This was a live bug: the
+    // sort below calls `.getTime()` on it, which throws when two
+    // leagues both have unpicked games, since a string has no such
+    // method.
     const unpickedResult = await db.execute<{
       league_member_id: string;
       unpicked_count: number;
-      next_lock_at: Date | null;
+      next_lock_at: string | null;
     }>(sql`
       select
         lm.id as league_member_id,
@@ -288,7 +295,12 @@ export async function leaguesRoutes(app: FastifyInstance): Promise<void> {
     `);
 
     const recordsByMember = new Map(recordsResult.rows.map((r) => [r.league_member_id, r]));
-    const unpickedByMember = new Map(unpickedResult.rows.map((r) => [r.league_member_id, r]));
+    const unpickedByMember = new Map(
+      unpickedResult.rows.map((r) => [
+        r.league_member_id,
+        { ...r, next_lock_at: r.next_lock_at === null ? null : new Date(r.next_lock_at) },
+      ]),
+    );
 
     const results = memberships.map((m) => {
       const record = recordsByMember.get(m.leagueMemberId);
@@ -554,12 +566,17 @@ export async function leaguesRoutes(app: FastifyInstance): Promise<void> {
         sql`, `,
       );
 
+      // NOTE: db.execute()'s raw path returns timestamptz columns as
+      // Postgres's text representation, not a JS Date — starts_at is
+      // converted below before it goes into the response, so the wire
+      // format stays ISO-8601 per docs/api-conventions.md's Timestamps
+      // convention. See docs/scoring-and-standings.md's engineering note.
       const slateResult = await db.execute<{
         game_id: string;
         sport: string;
         home_team: string;
         away_team: string;
-        starts_at: Date;
+        starts_at: string;
         status: string;
         allows_draw: boolean;
         winning_team: string | null;
@@ -610,7 +627,7 @@ export async function leaguesRoutes(app: FastifyInstance): Promise<void> {
           sport: row.sport,
           homeTeam: row.home_team,
           awayTeam: row.away_team,
-          startsAt: row.starts_at,
+          startsAt: new Date(row.starts_at),
           status: row.status,
           allowsDraw: row.allows_draw,
           winningTeam: row.winning_team,

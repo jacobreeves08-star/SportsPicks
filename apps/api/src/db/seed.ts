@@ -63,7 +63,12 @@ async function main() {
       { id: ALICE_MEMBERSHIP_ID, userId: ALICE_ID, leagueId: LEAGUE_ID, role: "commissioner" },
       { id: BOB_MEMBERSHIP_ID, userId: BOB_ID, leagueId: LEAGUE_ID, role: "member" },
     ])
-    .onConflictDoNothing();
+    // Bare onConflictDoNothing() can't infer an arbiter on this table —
+    // league_member also has a deferrable EXCLUDE constraint (the
+    // commissioner invariant, 0004_leagues_membership.sql), and Postgres
+    // won't infer against a deferrable constraint. Naming the actual
+    // (non-deferrable) unique constraint sidesteps that entirely.
+    .onConflictDoNothing({ target: [leagueMember.userId, leagueMember.leagueId] });
 
   const games = [
     { id: GAME_IDS[0], home: "Bills", away: "Jets", winner: "Bills" },

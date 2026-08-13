@@ -102,12 +102,18 @@ export async function writePick(
     return { accepted: false, reason: "PICK_LOCKED", message: "Picking has closed for this game" };
   }
 
+  // NOTE: db.execute()'s raw path returns timestamptz columns as
+  // Postgres's text representation, not a JS Date (confirmed
+  // empirically — see docs/scoring-and-standings.md's engineering
+  // note) — created_at is converted below before it goes into the
+  // response, so the wire format stays ISO-8601 per
+  // docs/api-conventions.md's Timestamps convention.
   const result = await executor.execute<{
     id: string;
     league_member_id: string;
     game_id: string;
     selected_team: string;
-    created_at: Date;
+    created_at: string;
     was_insert: boolean;
   }>(sql`
     with upserted as (
@@ -144,7 +150,7 @@ export async function writePick(
       leagueMemberId: row.league_member_id,
       gameId: row.game_id,
       selectedTeam: row.selected_team,
-      createdAt: row.created_at,
+      createdAt: new Date(row.created_at),
     },
   };
 }
