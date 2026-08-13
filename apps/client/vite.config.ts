@@ -15,6 +15,7 @@ export default defineConfig({
   plugins: [react()],
   test: {
     environment: "jsdom",
+    setupFiles: ["src/test-setup.ts"],
     include: ["src/**/*.test.{ts,tsx}"],
     // e2e/ is Playwright, run via `npm run e2e`, never picked up by vitest.
     exclude: ["e2e/**", "node_modules/**"],
