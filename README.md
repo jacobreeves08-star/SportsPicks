@@ -2,7 +2,7 @@
 
 Daily straight-up picks against the spread of nothing — just who wins. Friends compare records inside leagues.
 
-This repo covers foundations (repo, data model, CI, environments, observability, API conventions), authentication & identity (signup/login/sessions, email verification and password reset, profile management, the authorization layer, self-serve deletion), the sports data pipeline (schedule ingest, score polling, edge-case handling, failure alerting), leagues & membership (create/join/leave, invite codes, commissioner controls, the multi-league home screen), picks & lock enforcement (the daily slate, single/batch pick writes, server-enforced locking at game start, pick privacy, an append-only audit trail), scoring & standings (idempotent grading, ranked standings with a full tiebreaker chain, automatic and manual result correction, head-to-head comparison), and launch readiness (pick-reminder and results-summary email notifications, self-built server-side analytics, layered rate limiting and slate-response caching, closed-beta operator observability, an accessibility spec, and draft legal documents).
+This repo covers foundations (repo, data model, CI, environments, observability, API conventions), authentication & identity (signup/login/sessions, email verification and password reset, profile management, the authorization layer, self-serve deletion), the sports data pipeline (schedule ingest, score polling, edge-case handling, failure alerting), leagues & membership (create/join/leave, invite codes, commissioner controls, the multi-league home screen), picks & lock enforcement (the daily slate, single/batch pick writes, server-enforced locking at game start, pick privacy, an append-only audit trail), scoring & standings (idempotent grading, ranked standings with a full tiebreaker chain, automatic and manual result correction, head-to-head comparison), launch readiness (pick-reminder and results-summary email notifications, self-built server-side analytics, layered rate limiting and slate-response caching, closed-beta operator observability, an accessibility spec, and draft legal documents), and client infrastructure (a typed API client, server-time sync, a shared game-state model, TanStack Query with a rate-limit-aware polling policy, an optimistic pick-write hook with a revert that can't be made silent, an offline write queue, and a fully-typed deep-link route tree — zero screens yet; that's Epics 9-11).
 
 ## Stack
 
@@ -13,6 +13,7 @@ This repo covers foundations (repo, data model, CI, environments, observability,
 - **Timezones:** [Luxon](https://moment.github.io/luxon/) — all storage/business logic in UTC, conversion only at presentation. See [`docs/adr/0001-stack-selection.md`](docs/adr/0001-stack-selection.md) for the full rationale.
 - **Auth:** opaque DB-backed access/refresh tokens (not JWT), Argon2id password hashing, Resend for transactional email. See [`docs/adr/0002-auth-session-hashing-email.md`](docs/adr/0002-auth-session-hashing-email.md).
 - **Hosting:** [Render](https://render.com/) — web services, cron jobs, managed Postgres, per-PR preview environments
+- **Client:** React + Vite + TypeScript, [TanStack Query](https://tanstack.com/query) + [TanStack Router](https://tanstack.com/router) — `apps/client`, infrastructure only so far (no screens). See [`docs/client-architecture.md`](docs/client-architecture.md).
 
 ## Local setup (clean machine)
 
@@ -45,10 +46,25 @@ npm run results-summary --workspace apps/api
 npm run operator-digest --workspace apps/api
 ```
 
+### Running the client
+
+```bash
+cp apps/client/.env.example apps/client/.env  # defaults work as-is for local dev
+npm run dev:client   # starts Vite on http://localhost:5173
+```
+
+The API must also be running (`npm run dev`, above) — the client talks to it over CORS, allowed via `PUBLIC_CLIENT_URL` in the API's own `.env` (defaults to the client's local port, so the two talk to each other with zero config out of the box). There are no screens yet (Epics 9-11 build them) — `npm run dev:client` is for exercising the infrastructure in `apps/client/src/` directly, e.g. via its test suite or the e2e harness below.
+
+```bash
+npm run test --workspace apps/client        # unit tests (Vitest)
+npm run e2e --workspace apps/client          # Playwright, against the REAL api + client dev servers + Postgres
+```
+
 ## Repo layout
 
 ```
 apps/api/           Fastify API (routes, auth, authorization), scheduled jobs, DB schema/migrations/seed
+apps/client/         React client infrastructure (no screens yet) — see docs/client-architecture.md
 docs/adr/            Architecture decision records
 docs/legal/          Draft Terms of Service and Privacy Policy — NOT reviewed by counsel
 render.yaml           Render service definitions (web, cron, postgres) per environment
@@ -89,6 +105,10 @@ Idempotent grading (one point per correct winner, postponed/cancelled games void
 ## Launch readiness
 
 Pick-reminder and results-summary email notifications (idempotent per-member send, notification preferences, the DST-aware day-window logic), self-built server-side analytics (event log plus the ground-truth slate-completion-rate metric), layered rate limiting (per-account, per-route, signup bot protection) and slate-response caching, and closed-beta operator observability (`getOpsSummary()`, the enriched `/health/data-freshness`, and the daily operator digest email) are documented in [`docs/notifications.md`](docs/notifications.md), [`docs/analytics.md`](docs/analytics.md), and [`docs/rate-limiting-and-caching.md`](docs/rate-limiting-and-caching.md). The accessibility and responsive-design contract for a future frontend is in [`docs/accessibility-and-responsive.md`](docs/accessibility-and-responsive.md). Draft Terms of Service and Privacy Policy — **not reviewed by counsel, not for real use** — are in [`docs/legal/`](docs/legal/); the Privacy Policy's data-retention section is required to match [`docs/account-anonymization.md`](docs/account-anonymization.md) exactly.
+
+## Client infrastructure
+
+`apps/client` — a typed API client (built against [`docs/client-api-contract.md`](docs/client-api-contract.md), the ground truth read directly from the shipped API rather than assumed), server-time sync so countdowns stay correct against a real device clock, a single shared game-state model, TanStack Query with a rate-limit-aware polling policy, an optimistic pick-write hook whose revert can't be made silent by accident, an offline write queue that never implies a write succeeded before the server actually confirms it, and a fully-typed deep-link route tree. Zero screens — Epics 9-11 build those. Full design and module map in [`docs/client-architecture.md`](docs/client-architecture.md). Building this surfaced two real gaps in the API itself (no `X-Server-Time` signal, no CORS support at all) — both fixed and documented in the same place.
 
 ## Branching & contributing
 
