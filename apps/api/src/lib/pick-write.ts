@@ -2,6 +2,7 @@ import { eq, sql } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { game } from "../db/schema.js";
 import { ApiError } from "./http-errors.js";
+import { invalidateLeague } from "./slate-cache.js";
 import { nowUtc } from "./time.js";
 
 export type PickWriteRejectionReason =
@@ -62,9 +63,9 @@ export type PickWriteResult =
  */
 export async function writePick(
   executor: typeof db,
-  params: { leagueMemberId: string; gameId: string; selectedTeam: string; leagueSports: string[] },
+  params: { leagueId: string; leagueMemberId: string; gameId: string; selectedTeam: string; leagueSports: string[] },
 ): Promise<PickWriteResult> {
-  const { leagueMemberId, gameId, selectedTeam, leagueSports } = params;
+  const { leagueId, leagueMemberId, gameId, selectedTeam, leagueSports } = params;
 
   const [gameRow] = await executor.select().from(game).where(eq(game.id, gameId)).limit(1);
 
@@ -142,6 +143,14 @@ export async function writePick(
     // between the fast-path check and this statement.
     return { accepted: false, reason: "PICK_LOCKED", message: "Picking has closed for this game" };
   }
+
+  // JAC-43-48: an accepted write must be reflected on the caller's very
+  // next slate read regardless of the cache TTL — safe to call
+  // unconditionally, even from a nested (batch-endpoint) transaction
+  // that could still roll back on some later, unrelated failure: an
+  // eviction is never wrong, only ever a wasted cache miss on the next
+  // read, never stale-but-incorrect data.
+  invalidateLeague(leagueId);
 
   return {
     accepted: true,

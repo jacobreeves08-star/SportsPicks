@@ -13,6 +13,7 @@ import {
   truncateAllTables,
 } from "../db/test-helpers.js";
 import { createSession } from "../lib/session.js";
+import { clearSlateCacheForTests } from "../lib/slate-cache.js";
 
 /**
  * Tests for the new JAC-31-36 endpoints (batch pick write, slate,
@@ -26,6 +27,9 @@ let app: ReturnType<typeof buildApp>;
 
 beforeEach(async () => {
   await truncateAllTables();
+  // The slate cache (JAC-43-48) is a module-level singleton, not
+  // per-test DB state truncateAllTables() would reset.
+  clearSlateCacheForTests();
   app = buildApp();
 });
 
@@ -375,6 +379,128 @@ describe("GET /leagues/:leagueId/slate", () => {
       const res = await app.inject({ method: "GET", url: `/leagues/${league.id}/slate`, headers: auth(token) });
 
       expect(res.statusCode).toBe(403);
+    });
+  });
+
+  describe("caching and rate limiting (JAC-43-48)", () => {
+    it("a second read within the cache TTL serves the cached response, not a fresh query", async () => {
+      const owner = await createTestUser();
+      const league = await createTestLeague(owner.id, { sports: ["nfl"], timezone: "UTC" });
+      const member = await createTestLeagueMember(owner.id, league.id, { role: "commissioner" });
+      const game = await createTestGame({
+        sport: "nfl",
+        homeTeam: "Bills",
+        awayTeam: "Jets",
+        startsAt: new Date(Date.now() + 3600_000),
+      });
+      const dateStr = new Date(game.startsAt).toISOString().slice(0, 10);
+      const token = await tokenFor(owner.id);
+
+      const first = await app.inject({ method: "GET", url: `/leagues/${league.id}/slate?date=${dateStr}`, headers: auth(token) });
+      const firstGame = first.json().games.find((g: { gameId: string }) => g.gameId === game.id);
+      expect(firstGame.winningTeam).toBeNull();
+
+      // A job-driven change (score-poll finalizing the game) bypasses
+      // the cache entirely — direct DB writes, not through the API.
+      await db.update(gameTable).set({ status: "final" }).where(eq(gameTable.id, game.id));
+      await db.insert(result).values({ gameId: game.id, winningTeam: "Bills", source: "seed" });
+
+      const second = await app.inject({ method: "GET", url: `/leagues/${league.id}/slate?date=${dateStr}`, headers: auth(token) });
+      const secondGame = second.json().games.find((g: { gameId: string }) => g.gameId === game.id);
+      // Still the stale, cached value — a fresh query would show "Bills".
+      expect(secondGame.winningTeam).toBeNull();
+      void member;
+    });
+
+    /**
+     * The load-bearing test for the whole cache design: the slate
+     * response is NOT identical across viewers (myPick, and
+     * otherPicks's self-exclusion/lock-gated selectedTeam, both differ
+     * per caller). Keying the cache by (leagueId, date, viewerMemberId)
+     * is what's supposed to prevent one viewer's cached response from
+     * ever reaching another. This confirms it, not just the theory.
+     */
+    it("two different viewers polling the same slate never see each other's cached response", async () => {
+      const ownerUser = await createTestUser();
+      const otherUser = await createTestUser();
+      const league = await createTestLeague(ownerUser.id, { sports: ["nfl"], timezone: "UTC" });
+      const ownerMember = await createTestLeagueMember(ownerUser.id, league.id, { role: "commissioner" });
+      const otherMember = await createTestLeagueMember(otherUser.id, league.id, { role: "member" });
+      const game = await createTestGame({
+        sport: "nfl",
+        homeTeam: "Bills",
+        awayTeam: "Jets",
+        startsAt: new Date(Date.now() + 3600_000), // not yet locked
+      });
+      await createTestPick(ownerMember.id, game.id, { selectedTeam: "Bills" });
+      await createTestPick(otherMember.id, game.id, { selectedTeam: "Jets" });
+      const dateStr = new Date(game.startsAt).toISOString().slice(0, 10);
+
+      const ownerToken = await tokenFor(ownerUser.id);
+      const otherToken = await tokenFor(otherUser.id);
+
+      const ownerRes = await app.inject({
+        method: "GET",
+        url: `/leagues/${league.id}/slate?date=${dateStr}`,
+        headers: auth(ownerToken),
+      });
+      const ownerGame = ownerRes.json().games.find((g: { gameId: string }) => g.gameId === game.id);
+      expect(ownerGame.myPick).toBe("Bills");
+      expect(ownerGame.otherPicks.find((p: { leagueMemberId: string }) => p.leagueMemberId === otherMember.id).selectedTeam).toBeNull();
+
+      const otherRes = await app.inject({
+        method: "GET",
+        url: `/leagues/${league.id}/slate?date=${dateStr}`,
+        headers: auth(otherToken),
+      });
+      const otherGame = otherRes.json().games.find((g: { gameId: string }) => g.gameId === game.id);
+      expect(otherGame.myPick).toBe("Jets");
+      expect(otherGame.otherPicks.find((p: { leagueMemberId: string }) => p.leagueMemberId === ownerMember.id).selectedTeam).toBeNull();
+    });
+
+    it("a pick write is reflected on the caller's very next slate read, regardless of the cache TTL", async () => {
+      const owner = await createTestUser();
+      const league = await createTestLeague(owner.id, { sports: ["nfl"], timezone: "UTC" });
+      const member = await createTestLeagueMember(owner.id, league.id, { role: "commissioner" });
+      const game = await createTestGame({
+        sport: "nfl",
+        homeTeam: "Bills",
+        awayTeam: "Jets",
+        startsAt: new Date(Date.now() + 3600_000),
+      });
+      const dateStr = new Date(game.startsAt).toISOString().slice(0, 10);
+      const token = await tokenFor(owner.id);
+
+      const before = await app.inject({ method: "GET", url: `/leagues/${league.id}/slate?date=${dateStr}`, headers: auth(token) });
+      expect(before.json().pickedCount).toBe(0);
+
+      const putRes = await app.inject({
+        method: "PUT",
+        url: `/leagues/${league.id}/members/${member.id}/picks/${game.id}`,
+        headers: auth(token),
+        payload: { selectedTeam: "Bills" },
+      });
+      expect(putRes.statusCode).toBe(200);
+
+      const after = await app.inject({ method: "GET", url: `/leagues/${league.id}/slate?date=${dateStr}`, headers: auth(token) });
+      expect(after.json().pickedCount).toBe(1);
+    });
+
+    it("limits one account to SLATE_POLL_RATE_LIMIT_PER_MINUTE reads/minute", async () => {
+      const owner = await createTestUser();
+      const league = await createTestLeague(owner.id, { sports: ["nfl"] });
+      await createTestLeagueMember(owner.id, league.id, { role: "commissioner" });
+      const token = await tokenFor(owner.id);
+
+      let lastStatus = 200;
+      let lastBody: unknown;
+      for (let i = 0; i < 21; i++) {
+        const res = await app.inject({ method: "GET", url: `/leagues/${league.id}/slate`, headers: auth(token) });
+        lastStatus = res.statusCode;
+        lastBody = res.json();
+      }
+      expect(lastStatus).toBe(429);
+      expect((lastBody as { error: { code: string } }).error.code).toBe("RATE_LIMITED");
     });
   });
 });

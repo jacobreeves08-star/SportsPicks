@@ -97,6 +97,15 @@ const envSchema = z.object({
   // render a challenge widget) — see docs/rate-limiting-and-caching.md
   // for the documented CAPTCHA contract for a future frontend.
   SIGNUP_DAILY_LIMIT_PER_IP: z.coerce.number().int().positive().default(20),
+
+  // Slate polling (JAC-43-48) — the underlying game data only changes
+  // when an ingest job runs (score-poll every 5min at the fastest), so
+  // a short cache dramatically cuts DB load from a client polling for
+  // live lock transitions. See docs/rate-limiting-and-caching.md for
+  // the cache-key design and its accepted staleness/single-process
+  // tradeoffs.
+  SLATE_CACHE_TTL_SECONDS: z.coerce.number().int().positive().default(20),
+  SLATE_POLL_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(20),
 });
 
 export type Env = z.infer<typeof envSchema>;

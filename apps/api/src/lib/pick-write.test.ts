@@ -32,6 +32,7 @@ describe("writePick — happy path", () => {
     const { member, game, league } = await setup();
 
     const result = await writePick(db, {
+      leagueId: league.id,
       leagueMemberId: member.id,
       gameId: game.id,
       selectedTeam: "Bills",
@@ -53,8 +54,15 @@ describe("writePick — happy path", () => {
   it("changing an existing pick logs a 'change' audit row, not a duplicate pick", async () => {
     const { member, game, league } = await setup();
 
-    await writePick(db, { leagueMemberId: member.id, gameId: game.id, selectedTeam: "Bills", leagueSports: league.sports });
+    await writePick(db, {
+      leagueId: league.id,
+      leagueMemberId: member.id,
+      gameId: game.id,
+      selectedTeam: "Bills",
+      leagueSports: league.sports,
+    });
     const second = await writePick(db, {
+      leagueId: league.id,
       leagueMemberId: member.id,
       gameId: game.id,
       selectedTeam: "Jets",
@@ -84,6 +92,7 @@ describe("writePick — happy path", () => {
       startsAt: hoursFromNow(1),
     });
     const result = await writePick(db, {
+      leagueId: league.id,
       leagueMemberId: member.id,
       gameId: soccerGame.id,
       selectedTeam: "DRAW",
@@ -97,6 +106,7 @@ describe("writePick — pre-validated rejections (no SQL exception, no audit row
   it("rejects a game not found", async () => {
     const { member, league } = await setup();
     const result = await writePick(db, {
+      leagueId: league.id,
       leagueMemberId: member.id,
       gameId: "00000000-0000-0000-0000-000000000099",
       selectedTeam: "Bills",
@@ -106,9 +116,10 @@ describe("writePick — pre-validated rejections (no SQL exception, no audit row
   });
 
   it("rejects a game whose sport isn't in the league", async () => {
-    const { member } = await setup();
+    const { member, league } = await setup();
     const mlbGame = await createTestGame({ sport: "mlb", homeTeam: "Yankees", awayTeam: "Red Sox", startsAt: hoursFromNow(1) });
     const result = await writePick(db, {
+      leagueId: league.id,
       leagueMemberId: member.id,
       gameId: mlbGame.id,
       selectedTeam: "Yankees",
@@ -120,6 +131,7 @@ describe("writePick — pre-validated rejections (no SQL exception, no audit row
   it("rejects a canceled game", async () => {
     const { member, league, game } = await setup({ status: "canceled" });
     const result = await writePick(db, {
+      leagueId: league.id,
       leagueMemberId: member.id,
       gameId: game.id,
       selectedTeam: "Bills",
@@ -131,6 +143,7 @@ describe("writePick — pre-validated rejections (no SQL exception, no audit row
   it("rejects a postponed game", async () => {
     const { member, league, game } = await setup({ status: "postponed" });
     const result = await writePick(db, {
+      leagueId: league.id,
       leagueMemberId: member.id,
       gameId: game.id,
       selectedTeam: "Bills",
@@ -142,6 +155,7 @@ describe("writePick — pre-validated rejections (no SQL exception, no audit row
   it("rejects a team name that isn't playing in the game — the exact case that would otherwise trip the DB trigger", async () => {
     const { member, league, game } = await setup();
     const result = await writePick(db, {
+      leagueId: league.id,
       leagueMemberId: member.id,
       gameId: game.id,
       selectedTeam: "Cowboys",
@@ -159,6 +173,7 @@ describe("writePick — pre-validated rejections (no SQL exception, no audit row
   it("rejects 'DRAW' for a game that doesn't allow it", async () => {
     const { member, league, game } = await setup(); // nfl, allowsDraw defaults false
     const result = await writePick(db, {
+      leagueId: league.id,
       leagueMemberId: member.id,
       gameId: game.id,
       selectedTeam: "DRAW",
@@ -172,6 +187,7 @@ describe("writePick — lock enforcement", () => {
   it("rejects a game that has already started (fast path, pre-check)", async () => {
     const { member, league, game } = await setup({ startsAt: new Date(Date.now() - 60_000) });
     const result = await writePick(db, {
+      leagueId: league.id,
       leagueMemberId: member.id,
       gameId: game.id,
       selectedTeam: "Bills",
@@ -189,6 +205,7 @@ describe("writePick — lock enforcement", () => {
     await db.update(gameTable).set({ startsAt: new Date(Date.now() - 1000) }).where(eq(gameTable.id, game.id));
 
     const result = await writePick(db, {
+      leagueId: league.id,
       leagueMemberId: member.id,
       gameId: game.id,
       selectedTeam: "Bills",
