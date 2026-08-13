@@ -30,6 +30,25 @@ export function buildApp() {
 
   app.decorateRequest("user", null);
 
+  // Server-time signal for clients (JAC-49+: client infrastructure).
+  // Lock enforcement is entirely server-side (docs/picks-and-locking.md),
+  // but a client still needs to DISPLAY an accurate countdown — if it
+  // trusts its own device clock, a fast/slow clock shows a countdown
+  // that disagrees with what the server will actually decide. Set on
+  // EVERY response, success or error, via onSend (not just the 2xx
+  // paths a route handler could touch), so a client can resync on
+  // literally any request. Not the same as the standard HTTP `Date`
+  // header Node sends automatically on every response — that has only
+  // 1-second resolution, isn't part of this app's documented contract,
+  // and could be stripped or rewritten by an intermediary (a CDN, a
+  // proxy) without anyone noticing. This is explicit, millisecond-
+  // precision, and follows the same ISO-8601 UTC convention every
+  // other timestamp in this API already uses (docs/api-conventions.md).
+  app.addHook("onSend", (_request, reply, payload, done) => {
+    reply.header("X-Server-Time", new Date().toISOString());
+    done(null, payload);
+  });
+
   // `errorResponseBuilder` is passed explicitly to EVERY separate
   // `@fastify/rate-limit` registration in this app (not just this root
   // one) — confirmed empirically that a second, independent
