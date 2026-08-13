@@ -1,5 +1,6 @@
 import { db } from "./client.js";
 import {
+  analyticsEvent,
   game,
   jobRun,
   league,
@@ -33,7 +34,7 @@ function firstOrThrow<T>(rows: T[]): T {
  */
 export async function truncateAllTables(): Promise<void> {
   await db.execute(
-    `truncate table "user", league, league_member, league_invite_code, league_member_report, game, pick, pick_audit_log, result, result_correction, session, verification_token, job_run, push_token, notification_log restart identity cascade`,
+    `truncate table "user", league, league_member, league_invite_code, league_member_report, game, pick, pick_audit_log, result, result_correction, session, verification_token, job_run, push_token, notification_log, analytics_event restart identity cascade`,
   );
 }
 
@@ -182,6 +183,14 @@ export async function createTestNotificationLog(
       notificationDate: new Date().toISOString().slice(0, 10),
       ...overrides,
     })
+    .returning();
+  return firstOrThrow(rows);
+}
+
+export async function createTestAnalyticsEvent(overrides: Partial<typeof analyticsEvent.$inferInsert> = {}) {
+  const rows = await db
+    .insert(analyticsEvent)
+    .values({ eventType: "user_signed_up", ...overrides })
     .returning();
   return firstOrThrow(rows);
 }

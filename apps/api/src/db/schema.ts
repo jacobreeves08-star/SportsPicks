@@ -6,6 +6,7 @@ import {
   date,
   integer,
   boolean,
+  jsonb,
   unique,
   uniqueIndex,
   index,
@@ -396,6 +397,26 @@ export const notificationLog = pgTable(
     uniqueIndex("notification_log_dedupe_idx").on(t.notificationType, t.leagueMemberId, t.notificationDate),
     index("notification_log_league_id_idx").on(t.leagueId),
   ],
+);
+
+// Self-built analytics event log (JAC-44) — no third-party platform,
+// no client SDK, since every listed event is server-observable. See
+// docs/analytics.md. userId/leagueId/leagueMemberId are all nullable
+// (a signup event has no league yet) and never cascade-deleted, same
+// posture every other FK in this schema already takes, since rows are
+// anonymized rather than hard-deleted (docs/account-anonymization.md).
+export const analyticsEvent = pgTable(
+  "analytics_event",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    eventType: text("event_type").notNull(),
+    userId: uuid("user_id").references(() => user.id),
+    leagueId: uuid("league_id").references(() => league.id),
+    leagueMemberId: uuid("league_member_id").references(() => leagueMember.id),
+    metadata: jsonb("metadata"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("analytics_event_type_created_at_idx").on(t.eventType, t.createdAt)],
 );
 
 // Cross-run memory for the schedule-ingest and score-poll cron jobs
