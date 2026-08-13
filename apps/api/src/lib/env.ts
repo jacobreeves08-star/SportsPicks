@@ -106,6 +106,14 @@ const envSchema = z.object({
   // tradeoffs.
   SLATE_CACHE_TTL_SECONDS: z.coerce.number().int().positive().default(20),
   SLATE_POLL_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(20),
+
+  // Notifications (JAC-43-48) — see docs/notifications.md. How long
+  // before a league's first lock of the day the pick-reminder job sends
+  // — the send trigger itself is anchored to this absolute lead time
+  // before the lock instant, timezone-independent by construction.
+  REMINDER_LEAD_TIME_MINUTES: z.coerce.number().int().positive().default(60),
+  PICK_REMINDER_HEARTBEAT_URL: optionalUrl(),
+  RESULTS_SUMMARY_HEARTBEAT_URL: optionalUrl(),
 });
 
 export type Env = z.infer<typeof envSchema>;
