@@ -13,6 +13,13 @@ import { defineConfig } from "vitest/config";
 // nothing to scan for in a src/routes with no actual page files.
 export default defineConfig({
   plugins: [react()],
+  // No `build.rollupOptions.input` override — intentionally leaves
+  // harness.html (the e2e-only test harness, see
+  // src/e2e-harness/lock-transition-harness.tsx) OUT of `npm run
+  // build`'s output. Vite's DEV server still serves it directly with
+  // zero config (any .html file in the project root is reachable),
+  // which is all `npm run e2e` needs — it never touches a production
+  // build.
   test: {
     environment: "jsdom",
     setupFiles: ["src/test-setup.ts"],
