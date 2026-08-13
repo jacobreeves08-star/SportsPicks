@@ -11,6 +11,7 @@
     "anonymize-accounts": "node dist/jobs/anonymize-accounts.js",
     "pick-reminder": "node dist/jobs/pick-reminder.js",
     "results-summary": "node dist/jobs/results-summary.js",
+    "operator-digest": "node dist/jobs/operator-digest.js",
     "test": "vitest run",
     "lint": "eslint src",
     "typecheck": "tsc -p tsconfig.json --noEmit",

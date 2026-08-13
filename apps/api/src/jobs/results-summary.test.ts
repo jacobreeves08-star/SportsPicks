@@ -50,6 +50,7 @@ function fakeEmailProvider(): EmailProvider & { resultsSummaryCalls: ResultsSumm
     sendResultsSummaryEmail: vi.fn(async (to: string, params) => {
       resultsSummaryCalls.push({ to, ...params });
     }),
+    sendOperatorDigestEmail: vi.fn(async () => {}),
   };
 }
 

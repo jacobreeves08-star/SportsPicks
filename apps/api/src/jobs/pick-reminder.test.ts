@@ -31,6 +31,7 @@ function fakeEmailProvider(): EmailProvider & {
       pickReminderCalls.push({ to, leagueName: params.leagueName, unpickedGames: params.unpickedGames });
     }),
     sendResultsSummaryEmail: vi.fn(async () => {}),
+    sendOperatorDigestEmail: vi.fn(async () => {}),
   };
 }
 

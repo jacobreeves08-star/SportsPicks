@@ -114,6 +114,15 @@ const envSchema = z.object({
   REMINDER_LEAD_TIME_MINUTES: z.coerce.number().int().positive().default(60),
   PICK_REMINDER_HEARTBEAT_URL: optionalUrl(),
   RESULTS_SUMMARY_HEARTBEAT_URL: optionalUrl(),
+
+  // Closed-beta observability (JAC-48) — see docs/notifications.md and
+  // operator-digest.ts. Unset -> the digest job is a no-op with a
+  // warning log, matching this app's "unset env var = no-op"
+  // convention everywhere else (HEARTBEAT_URL, SENTRY_DSN, etc). A
+  // single static recipient, not a table of subscribers — this is an
+  // operator tool, not a user-facing feature.
+  OPERATOR_EMAIL: optionalString(),
+  OPERATOR_DIGEST_HEARTBEAT_URL: optionalUrl(),
 });
 
 export type Env = z.infer<typeof envSchema>;

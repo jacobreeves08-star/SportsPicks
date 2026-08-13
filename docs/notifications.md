@@ -56,6 +56,10 @@ Each eligible recipient (active, notifications enabled globally and per-league) 
 
 Neither job has a UI to flip these yet (no frontend exists) — both are plain columns, settable via a future settings endpoint or directly for now.
 
+## Operator digest — a third job, not a member-facing one
+
+`apps/api/src/jobs/operator-digest.ts` (daily, `0 13 * * *`, own heartbeat) is closed-beta observability (JAC-48), not a member notification: it emails `getOpsSummary()`'s output (`lib/ops-summary.ts` — job health, stale games, 24h activity counts, per-league slate completion) to a single static recipient, `env.OPERATOR_EMAIL`. Unset → no-op with a warning log, same convention as every other optional env var in this app. Idempotency is a plain `job_run` check for an already-succeeded run today — the per-member `notification_log` mechanism above exists specifically for fan-out to many recipients, which doesn't apply here. This is the tool that makes "seven consecutive days where nobody had to ask what happened" checkable without anyone remembering to curl `/health/data-freshness` themselves.
+
 ## Push notifications — schema only, no delivery this epic
 
 Confirmed with the user: push is out of scope this epic; email covers both jobs. The schema exists so a later epic can add delivery without a migration:

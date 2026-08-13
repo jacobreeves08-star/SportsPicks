@@ -2,6 +2,7 @@ import { DateTime } from "luxon";
 import { Resend } from "resend";
 import { env } from "./env.js";
 import { logger } from "./logger.js";
+import type { OpsSummary } from "./ops-summary.js";
 
 /** Formats an absolute instant in the RECIPIENT's own timezone (JAC-43-48)
  * — the send trigger itself is anchored to the instant, timezone-
@@ -43,6 +44,9 @@ export interface EmailProvider {
     to: string,
     params: { leagueName: string; wins: number; losses: number; rank: number; rankChange: number | null },
   ): Promise<void>;
+  /** JAC-48 — daily closed-beta ops digest to a single static
+   * operator recipient (env.OPERATOR_EMAIL). Not a user-facing email. */
+  sendOperatorDigestEmail(to: string, summary: OpsSummary): Promise<void>;
 }
 
 class MockEmailProvider implements EmailProvider {
@@ -74,6 +78,10 @@ class MockEmailProvider implements EmailProvider {
     params: { leagueName: string; wins: number; losses: number; rank: number; rankChange: number | null },
   ): Promise<void> {
     logger.info({ email: "results_summary", to, ...params }, "mock email: results summary");
+  }
+
+  async sendOperatorDigestEmail(to: string, summary: OpsSummary): Promise<void> {
+    logger.info({ email: "operator_digest", to, ...summary }, "mock email: operator digest");
   }
 }
 
@@ -145,6 +153,28 @@ class ResendEmailProvider implements EmailProvider {
       to,
       `${leagueName}: today's results`,
       `<p>Today in ${leagueName}: <strong>${wins}-${losses}</strong>. You're currently rank <strong>${rank}</strong> (${movement}).</p>`,
+    );
+  }
+
+  async sendOperatorDigestEmail(to: string, summary: OpsSummary): Promise<void> {
+    const jobRows = summary.jobs
+      .map(
+        (j) =>
+          `<li>${j.jobName}: ${j.lastRunSucceeded === null ? "never run" : j.lastRunSucceeded ? "ok" : "FAILED"} (last run ${j.lastRunAt ? j.lastRunAt.toISOString() : "never"})</li>`,
+      )
+      .join("");
+    const leagueRows = summary.slateCompletionRates
+      .map(
+        (l) =>
+          `<li>${l.leagueName}: ${l.rate === null ? "n/a" : `${Math.round(l.rate * 100)}%`} (${l.completedCount}/${l.totalMembers})</li>`,
+      )
+      .join("");
+    await this.send(
+      to,
+      "Sports Pick'em: daily operator digest",
+      `<h2>Jobs</h2><ul>${jobRows}</ul>` +
+        `<p>Stale games: ${summary.staleGameCount}. Corrections (24h): ${summary.correctionsLast24h}. Signups (24h): ${summary.signupsLast24h}. Picks (24h): ${summary.picksLast24h}.</p>` +
+        `<h2>Today's slate completion, by league</h2><ul>${leagueRows}</ul>`,
     );
   }
 

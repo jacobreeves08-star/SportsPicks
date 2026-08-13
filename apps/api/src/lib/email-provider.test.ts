@@ -27,6 +27,19 @@ describe("createEmailProvider", () => {
         rankChange: 1,
       }),
     ).resolves.toBeUndefined();
+    await expect(
+      provider.sendOperatorDigestEmail("ops@example.com", {
+        jobs: [{ jobName: "score-poll", lastRunAt: new Date(), lastRunSucceeded: true, lastSuccessAt: new Date() }],
+        staleGameCount: 0,
+        correctionsLast24h: 0,
+        signupsLast24h: 1,
+        picksLast24h: 3,
+        slateCompletionRates: [
+          { leagueId: "league-1", leagueName: "Test League", totalMembers: 2, completedCount: 1, rate: 0.5 },
+        ],
+        generatedAt: new Date(),
+      }),
+    ).resolves.toBeUndefined();
   });
 
   it("mock and resend providers are distinct implementations", () => {

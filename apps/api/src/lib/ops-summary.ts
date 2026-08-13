@@ -16,6 +16,7 @@ export const TRACKED_JOBS = [
   "anonymize-accounts",
   "pick-reminder",
   "results-summary",
+  "operator-digest",
 ] as const;
 
 export interface LeagueSlateCompletion {

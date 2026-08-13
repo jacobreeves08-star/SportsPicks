@@ -69,11 +69,18 @@ describe("GET /health/data-freshness", () => {
     expect(res.json().generatedAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
   });
 
-  it("tracks all five jobs, including the notification jobs added this epic (JAC-43-48)", async () => {
+  it("tracks all six jobs, including the ones added this epic (JAC-43-48)", async () => {
     const res = await app.inject({ method: "GET", url: "/health/data-freshness" });
     const jobNames = res.json().jobs.map((j: { jobName: string }) => j.jobName);
     expect(jobNames).toEqual(
-      expect.arrayContaining(["schedule-ingest", "score-poll", "anonymize-accounts", "pick-reminder", "results-summary"]),
+      expect.arrayContaining([
+        "schedule-ingest",
+        "score-poll",
+        "anonymize-accounts",
+        "pick-reminder",
+        "results-summary",
+        "operator-digest",
+      ]),
     );
   });
 
