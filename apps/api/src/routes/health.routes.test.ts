@@ -1,6 +1,15 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { buildApp } from "../app.js";
-import { createTestGame, createTestJobRun, truncateAllTables } from "../db/test-helpers.js";
+import {
+  createTestGame,
+  createTestJobRun,
+  createTestLeague,
+  createTestLeagueMember,
+  createTestPickAuditLog,
+  createTestResultCorrection,
+  createTestUser,
+  truncateAllTables,
+} from "../db/test-helpers.js";
 
 let app: ReturnType<typeof buildApp>;
 
@@ -58,5 +67,55 @@ describe("GET /health/data-freshness", () => {
   it("returns ISO-8601 UTC timestamps, per api-conventions", async () => {
     const res = await app.inject({ method: "GET", url: "/health/data-freshness" });
     expect(res.json().generatedAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+  });
+
+  it("tracks all five jobs, including the notification jobs added this epic (JAC-43-48)", async () => {
+    const res = await app.inject({ method: "GET", url: "/health/data-freshness" });
+    const jobNames = res.json().jobs.map((j: { jobName: string }) => j.jobName);
+    expect(jobNames).toEqual(
+      expect.arrayContaining(["schedule-ingest", "score-poll", "anonymize-accounts", "pick-reminder", "results-summary"]),
+    );
+  });
+
+  it("counts signups in the last 24h (JAC-43-48)", async () => {
+    await createTestUser();
+    await createTestUser();
+
+    const res = await app.inject({ method: "GET", url: "/health/data-freshness" });
+    expect(res.json().signupsLast24h).toBe(2);
+  });
+
+  it("counts result corrections in the last 24h (JAC-43-48)", async () => {
+    const owner = await createTestUser();
+    const league = await createTestLeague(owner.id);
+    const game = await createTestGame({ sport: "nfl" });
+    await createTestResultCorrection(game.id, { correctedFromLeagueId: league.id });
+
+    const res = await app.inject({ method: "GET", url: "/health/data-freshness" });
+    expect(res.json().correctionsLast24h).toBe(1);
+  });
+
+  it("counts picks (from pick_audit_log) in the last 24h (JAC-43-48)", async () => {
+    const owner = await createTestUser();
+    const league = await createTestLeague(owner.id);
+    const member = await createTestLeagueMember(owner.id, league.id, { role: "commissioner" });
+    const game = await createTestGame({ sport: "nfl" });
+    await createTestPickAuditLog(member.id, game.id);
+    await createTestPickAuditLog(member.id, game.id, { action: "change" });
+
+    const res = await app.inject({ method: "GET", url: "/health/data-freshness" });
+    expect(res.json().picksLast24h).toBe(2);
+  });
+
+  it("includes a slate-completion entry per league (JAC-43-48)", async () => {
+    const owner = await createTestUser();
+    const league = await createTestLeague(owner.id, { name: "Ops Summary League" });
+    await createTestLeagueMember(owner.id, league.id, { role: "commissioner" });
+
+    const res = await app.inject({ method: "GET", url: "/health/data-freshness" });
+    const entry = res
+      .json()
+      .slateCompletionRates.find((s: { leagueId: string }) => s.leagueId === league.id);
+    expect(entry).toMatchObject({ leagueName: "Ops Summary League", totalMembers: 0, completedCount: 0, rate: null });
   });
 });
