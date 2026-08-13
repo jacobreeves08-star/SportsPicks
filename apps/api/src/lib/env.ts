@@ -90,6 +90,13 @@ const envSchema = z.object({
   // throttled together while one member is legitimately picking a full
   // slate.
   PICK_WRITE_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(30),
+
+  // Signup bot protection (JAC-43-48). Layered on top of the existing
+  // 5/min-per-IP limit — that alone doesn't stop a bot from signing up
+  // slowly and steadily all day. No CAPTCHA (no frontend exists to
+  // render a challenge widget) — see docs/rate-limiting-and-caching.md
+  // for the documented CAPTCHA contract for a future frontend.
+  SIGNUP_DAILY_LIMIT_PER_IP: z.coerce.number().int().positive().default(20),
 });
 
 export type Env = z.infer<typeof envSchema>;

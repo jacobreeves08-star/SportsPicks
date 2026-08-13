@@ -62,6 +62,49 @@ describe("POST /auth/signup", () => {
     expect(rows).toHaveLength(1);
   });
 
+  /**
+   * JAC-43-48 bot protection: the honeypot field is invisible to a real
+   * client (no frontend renders it), so only a scripted client guessing
+   * at field names would ever fill it. A filled value gets the exact
+   * same success response as a real signup, with no side effects —
+   * never reveals that anything was detected, same idiom as the
+   * duplicate-email branch above.
+   */
+  it("a filled honeypot field returns success but creates no user and sends no email", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/auth/signup",
+      payload: {
+        email: "honeypot@example.com",
+        password: "correcthorsebattery",
+        displayName: "Bot",
+        timezone: "UTC",
+        website: "https://spam.example",
+      },
+    });
+    expect(res.statusCode).toBe(201);
+    expect(res.json()).toEqual({ message: "Check your email to verify your account." });
+    const rows = await findUserByEmail("honeypot@example.com");
+    expect(rows).toBeUndefined();
+  });
+
+  it("an empty honeypot field behaves like a normal signup", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/auth/signup",
+      payload: {
+        email: "nohoneypot@example.com",
+        password: "correcthorsebattery",
+        displayName: "Real",
+        timezone: "UTC",
+        website: "",
+      },
+    });
+    expect(res.statusCode).toBe(201);
+    const rows = await findUserByEmail("nohoneypot@example.com");
+    expect(rows).toBeDefined();
+  });
+
   it("rate limits after repeated rapid requests", async () => {
     const results = [];
     for (let i = 0; i < 6; i++) {
