@@ -29,7 +29,7 @@
 .unpickedPill {
   padding: var(--space-1) var(--space-2);
   border-radius: var(--radius-full);
-  background-color: rgba(15, 118, 110, 0.1);
+  background-color: var(--color-pick-mine-wash);
 }
 
 .headerLink,

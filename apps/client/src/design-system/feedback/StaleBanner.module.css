@@ -1,7 +1,10 @@
 .banner {
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-md);
-  background-color: rgba(71, 83, 107, 0.08);
+  /* Neutral wash, same convention as VoidBadge/NotYetOpenBadge/
+     LockBadge — this used to be a bluer-than-its-own-icon slate tint,
+     an off-palette leftover from the light-theme original. */
+  background-color: rgba(255, 255, 255, 0.06);
 }
 
 .icon {

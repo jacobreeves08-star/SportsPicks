@@ -45,12 +45,24 @@
 
   /* Semantic state/result colors — each is paired with a non-color
      signal (icon/weight/text) by the component that uses it; see
-     indicators/. Never rely on hue alone anywhere in this app. */
+     indicators/. Never rely on hue alone anywhere in this app.
+
+     --color-state-locked and --color-state-open used to be their own
+     off-palette hues (amber, teal) left over from the light-theme
+     original — harmless in isolation, but jarring once the rest of
+     the app narrowed to black + one lime accent (+ red/green strictly
+     for win/loss), since neither amber nor teal appears ANYWHERE
+     else. Both now deliberately equal an existing token's exact hex
+     (--color-text-dim / --color-pick-mine) rather than a new nearby
+     shade, kept as separate names since their MEANING is still
+     distinct ("this game is locked" vs. "body text"; "picking is
+     still open" vs. "this is mine/selected") — a future re-theme
+     could diverge them again without touching every call site. */
   --color-pick-mine: #d7ff2b;
   --color-result-hit: #4ade80;
   --color-result-miss: #fb7185;
-  --color-state-locked: #fbbf24;
-  --color-state-open: #2dd4bf;
+  --color-state-locked: #a1a1aa;
+  --color-state-open: #d7ff2b;
   --color-state-stale: #a3a9b8;
 
   /* Not one of the Epic 9 brief's named tokens, added deliberately:
