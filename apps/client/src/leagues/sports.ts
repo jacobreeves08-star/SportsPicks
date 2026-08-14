@@ -17,6 +17,7 @@ export const SPORT_OPTIONS: SportOption[] = [
   { value: "nba", label: "NBA" },
   { value: "ncaamb", label: "NCAA Men's Basketball" },
   { value: "mlb", label: "MLB" },
+  { value: "nhl", label: "NHL" },
   { value: "epl", label: "Premier League" },
   { value: "ucl", label: "Champions League" },
   { value: "mls", label: "MLS" },

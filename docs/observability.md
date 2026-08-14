@@ -16,7 +16,7 @@ Fastify's built-in logger is wired to `apps/api/src/lib/logger.ts` (Pino, JSON, 
 
 `captureMessage(message, extra?)` (same file, same no-op-unless-`SENTRY_DSN` pattern, `level: "warning"`) exists for exactly that gap. Two call sites today:
 
-- `schedule-ingest.ts` — fires if all 8 tracked sports return zero games in a single run. A per-sport zero is often legitimate (e.g. no NBA games in August); all-sports-zero simultaneously is not, given this app's combined near-year-round coverage.
+- `schedule-ingest.ts` — fires if all 9 tracked sports return zero games in a single run. A per-sport zero is often legitimate (e.g. no NBA games in August); all-sports-zero simultaneously is not, given this app's combined near-year-round coverage.
 - `score-poll.ts` — fires if `findStaleGames()` (`apps/api/src/lib/game-staleness.ts`) finds any game past its sport's expected maximum duration (a per-sport table, e.g. NFL 4.5h, soccer 2.5h) still without a final result.
 
 Neither call marks the run as failed (`job_run.succeeded` stays `true`) — the job genuinely did what it was supposed to; the data itself looks wrong, which is a distinct signal from "the code threw" and is reported through a distinct channel on purpose. See `docs/sports-pipeline.md` and `docs/adr/0003-sports-data-pipeline.md` for the full design reasoning.

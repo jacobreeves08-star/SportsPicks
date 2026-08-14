@@ -77,11 +77,12 @@ describe("toCanonicalStatus", () => {
 });
 
 describe("ESPN_SPORT_SLUGS", () => {
-  it("covers all 8 sports in scope with the correct draw eligibility", () => {
+  it("covers all 9 sports in scope with the correct draw eligibility", () => {
     expect(Object.keys(ESPN_SPORT_SLUGS).sort()).toEqual(
-      ["epl", "mlb", "nba", "ncaamb", "ncaaf", "nfl", "mls", "ucl"].sort(),
+      ["epl", "mlb", "nba", "ncaamb", "ncaaf", "nfl", "nhl", "mls", "ucl"].sort(),
     );
     expect(ESPN_SPORT_SLUGS.nfl!.allowsDraw).toBe(false);
+    expect(ESPN_SPORT_SLUGS.nhl!.allowsDraw).toBe(false);
     expect(ESPN_SPORT_SLUGS.epl!.allowsDraw).toBe(true);
     expect(ESPN_SPORT_SLUGS.ucl!.allowsDraw).toBe(true);
     expect(ESPN_SPORT_SLUGS.mls!.allowsDraw).toBe(true);

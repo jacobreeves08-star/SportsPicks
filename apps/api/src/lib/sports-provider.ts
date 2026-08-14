@@ -21,7 +21,7 @@ export interface CanonicalTeam {
 
 export interface CanonicalScheduleEntry {
   externalId: string;
-  sport: string; // nfl|ncaaf|nba|ncaamb|mlb|epl|ucl|mls
+  sport: string; // nfl|ncaaf|nba|ncaamb|mlb|nhl|epl|ucl|mls
   startsAt: Date;
   status: CanonicalGameStatus;
   homeTeam: CanonicalTeam;
@@ -58,10 +58,20 @@ export interface SportsProvider {
 
 /**
  * Sport code -> ESPN URL slug + draw eligibility. Single source of
- * truth: schedule-ingest reads this to know which 8 codes to loop, and
+ * truth: schedule-ingest reads this to know which 9 codes to loop, and
  * to stamp game.allows_draw — no sport-code knowledge is duplicated
  * anywhere else (not even in SQL — see the pick-validation trigger,
  * which reads game.allows_draw rather than hardcoding a sport list).
+ *
+ * NHL confirmed structurally identical to the other team sports here
+ * (exactly 2 competitors per event, each with homeAway + a team
+ * object) against the live API — a genuine drop-in, unlike golf
+ * (multi-competitor leaderboard, no home/away concept at all), tennis
+ * (matches nested under event.groupings[].competitions[], not
+ * event.competitions[] directly, and a tournament "event" spans ~2
+ * weeks), or MMA (multiple fights per event with no homeAway field at
+ * all) — none of which fit this adapter's shape without real rework,
+ * so none are included here.
  */
 export const ESPN_SPORT_SLUGS: Record<string, { espnSport: string; espnLeague: string; allowsDraw: boolean }> = {
   nfl: { espnSport: "football", espnLeague: "nfl", allowsDraw: false },
@@ -69,6 +79,7 @@ export const ESPN_SPORT_SLUGS: Record<string, { espnSport: string; espnLeague: s
   nba: { espnSport: "basketball", espnLeague: "nba", allowsDraw: false },
   ncaamb: { espnSport: "basketball", espnLeague: "mens-college-basketball", allowsDraw: false },
   mlb: { espnSport: "baseball", espnLeague: "mlb", allowsDraw: false },
+  nhl: { espnSport: "hockey", espnLeague: "nhl", allowsDraw: false },
   epl: { espnSport: "soccer", espnLeague: "eng.1", allowsDraw: true },
   ucl: { espnSport: "soccer", espnLeague: "uefa.champions", allowsDraw: true },
   mls: { espnSport: "soccer", espnLeague: "usa.1", allowsDraw: true },

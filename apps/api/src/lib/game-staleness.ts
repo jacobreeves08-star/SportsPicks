@@ -16,6 +16,7 @@ export const MAX_GAME_DURATION_HOURS: Record<string, number> = {
   nba: 3,
   ncaamb: 3,
   mlb: 4,
+  nhl: 3.5,
   epl: 2.5,
   ucl: 2.5,
   mls: 2.5,
