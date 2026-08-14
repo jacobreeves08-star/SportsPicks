@@ -26,6 +26,8 @@ interface SlateResponse {
     sport: string;
     homeTeam: string;
     awayTeam: string;
+    homeTeamLogoUrl: string | null;
+    awayTeamLogoUrl: string | null;
     startsAt: Date;
     status: string;
     allowsDraw: boolean;
@@ -690,6 +692,8 @@ export async function leaguesRoutes(app: FastifyInstance): Promise<void> {
           sport: string;
           home_team: string;
           away_team: string;
+          home_team_logo_url: string | null;
+          away_team_logo_url: string | null;
           starts_at: string;
           status: string;
           allows_draw: boolean;
@@ -704,7 +708,8 @@ export async function leaguesRoutes(app: FastifyInstance): Promise<void> {
           }>;
         }>(sql`
           select
-            g.id as game_id, g.sport, g.home_team, g.away_team, g.starts_at, g.status, g.allows_draw,
+            g.id as game_id, g.sport, g.home_team, g.away_team, g.home_team_logo_url, g.away_team_logo_url,
+            g.starts_at, g.status, g.allows_draw,
             r.winning_team,
             (now() >= g.starts_at) as locked,
             max(case when lm.id = ${member.id} then p.selected_team end) as my_pick,
@@ -725,7 +730,8 @@ export async function leaguesRoutes(app: FastifyInstance): Promise<void> {
           where g.sport in (${sportsSql})
             and g.starts_at >= ${start} and g.starts_at < ${end}
             and lm.league_id = ${leagueId} and lm.left_at is null
-          group by g.id, g.sport, g.home_team, g.away_team, g.starts_at, g.status, g.allows_draw, r.winning_team
+          group by g.id, g.sport, g.home_team, g.away_team, g.home_team_logo_url, g.away_team_logo_url,
+            g.starts_at, g.status, g.allows_draw, r.winning_team
           order by g.starts_at
         `);
 
@@ -746,6 +752,8 @@ export async function leaguesRoutes(app: FastifyInstance): Promise<void> {
             sport: row.sport,
             homeTeam: row.home_team,
             awayTeam: row.away_team,
+            homeTeamLogoUrl: row.home_team_logo_url,
+            awayTeamLogoUrl: row.away_team_logo_url,
             startsAt: new Date(row.starts_at),
             status: row.status,
             allowsDraw: row.allows_draw,

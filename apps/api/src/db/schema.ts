@@ -177,6 +177,11 @@ export const game = pgTable(
     // entity table. Nullable: unset for manually-entered games.
     homeTeamExternalId: text("home_team_external_id"),
     awayTeamExternalId: text("away_team_external_id"),
+    // ESPN's `competitor.team.logo` — a stable per-franchise CDN URL.
+    // Nullable/re-ingest-corrected for the same reasons as the external
+    // IDs above.
+    homeTeamLogoUrl: text("home_team_logo_url"),
+    awayTeamLogoUrl: text("away_team_logo_url"),
     startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
     status: text("status").notNull().default("scheduled"),
     // Set by schedule-ingest based on sport (true only for soccer

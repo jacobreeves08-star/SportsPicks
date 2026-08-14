@@ -59,6 +59,13 @@
   white-space: nowrap;
 }
 
+.sideLogo {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
 /* pick-mine: a full color-fill change, not a hairline alone — the
    selected side ALSO grows a check icon (PickControl.tsx renders
    CheckIcon whenever isSelected), a second, non-color signal that

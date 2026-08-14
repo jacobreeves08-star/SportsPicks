@@ -135,6 +135,8 @@ export function PickControl({ teams, state, onSelect, remainingMs, className }: 
         {sides.map((team) => {
           const isSelected = team === selected;
           const isWinner = state.status === "final" && team === state.winningTeam;
+          const logoUrl =
+            team === teams.homeTeam ? teams.homeTeamLogoUrl : team === teams.awayTeam ? teams.awayTeamLogoUrl : null;
           return (
             <button
               key={team}
@@ -157,6 +159,23 @@ export function PickControl({ teams, state, onSelect, remainingMs, className }: 
                 isWinner && styles.sideWinner,
               )}
             >
+              {logoUrl ? (
+                // Decorative: the label span right after it already
+                // announces the team name, so a redundant alt would
+                // double-announce to a screen reader. Broken/expired
+                // CDN URLs just disappear rather than showing a
+                // browser's broken-image icon.
+                <img
+                  src={logoUrl}
+                  alt=""
+                  aria-hidden="true"
+                  className={styles.sideLogo}
+                  loading="lazy"
+                  onError={(e) => {
+                    e.currentTarget.style.display = "none";
+                  }}
+                />
+              ) : null}
               <span className={styles.sideLabel}>{describeSide(team)}</span>
               {isSelected || isWinner ? <CheckIcon size={15} className={styles.sideCheck} /> : null}
             </button>

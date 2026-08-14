@@ -23,6 +23,12 @@
 export interface PickControlTeams {
   homeTeam: string;
   awayTeam: string;
+  /** Team crest image URL, sourced from the provider (ESPN's
+   * `team.logo`). Optional/nullable — Storybook mock data and any
+   * manually-entered game may not have one, and the side simply
+   * renders text-only when absent. */
+  homeTeamLogoUrl?: string | null;
+  awayTeamLogoUrl?: string | null;
   /** Gates the literal `'DRAW'` third side (docs/data-model.md,
    * docs/sports-pipeline.md — the three soccer competitions only). */
   allowsDraw: boolean;

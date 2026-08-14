@@ -79,6 +79,8 @@ game                     -- GLOBAL, never duplicated per league
   home_team_external_id / away_team_external_id (nullable)  -- ESPN's stable per-franchise ID;
                                                               -- join key so a name correction on
                                                               -- re-ingest still finds the same row
+  home_team_logo_url / away_team_logo_url (nullable)  -- ESPN's team.logo CDN URL, re-ingest-corrected
+                                                        -- the same way as the external IDs above
   allows_draw (boolean, default false)  -- true only for soccer competitions (epl/ucl/mls); gates
                                           -- 'DRAW' as a legal pick.selected_team value
   starts_at (timestamptz, UTC)

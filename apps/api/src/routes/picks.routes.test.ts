@@ -230,6 +230,42 @@ describe("GET /leagues/:leagueId/slate", () => {
     void member;
   });
 
+  it("includes each game's home/away team logo URLs", async () => {
+    const owner = await createTestUser();
+    const league = await createTestLeague(owner.id, { sports: ["mlb"], timezone: "UTC" });
+    await createTestLeagueMember(owner.id, league.id, { role: "commissioner" });
+    await createTestGame({
+      sport: "mlb",
+      homeTeam: "Cubs",
+      awayTeam: "Cardinals",
+      homeTeamLogoUrl: "https://a.espncdn.com/i/teamlogos/mlb/500/chc.png",
+      awayTeamLogoUrl: "https://a.espncdn.com/i/teamlogos/mlb/500/stl.png",
+      startsAt: new Date(),
+    });
+
+    const token = await tokenFor(owner.id);
+    const res = await app.inject({ method: "GET", url: `/leagues/${league.id}/slate`, headers: auth(token) });
+
+    expect(res.statusCode).toBe(200);
+    const [game] = res.json().games;
+    expect(game.homeTeamLogoUrl).toBe("https://a.espncdn.com/i/teamlogos/mlb/500/chc.png");
+    expect(game.awayTeamLogoUrl).toBe("https://a.espncdn.com/i/teamlogos/mlb/500/stl.png");
+  });
+
+  it("returns null logo URLs for a game that has none", async () => {
+    const owner = await createTestUser();
+    const league = await createTestLeague(owner.id, { sports: ["nfl"], timezone: "UTC" });
+    await createTestLeagueMember(owner.id, league.id, { role: "commissioner" });
+    await createTestGame({ sport: "nfl", homeTeam: "Bills", awayTeam: "Jets", startsAt: new Date() });
+
+    const token = await tokenFor(owner.id);
+    const res = await app.inject({ method: "GET", url: `/leagues/${league.id}/slate`, headers: auth(token) });
+
+    const [game] = res.json().games;
+    expect(game.homeTeamLogoUrl).toBeNull();
+    expect(game.awayTeamLogoUrl).toBeNull();
+  });
+
   it("defaults to today in the league's timezone when date is omitted", async () => {
     const owner = await createTestUser();
     const league = await createTestLeague(owner.id, { sports: ["nfl"], timezone: "UTC" });

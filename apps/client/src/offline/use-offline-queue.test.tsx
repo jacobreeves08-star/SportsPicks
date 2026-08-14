@@ -19,6 +19,8 @@ function slate(): SlateResponse {
         sport: "nfl",
         homeTeam: "Bills",
         awayTeam: "Jets",
+        homeTeamLogoUrl: null,
+        awayTeamLogoUrl: null,
         startsAt: "2026-08-13T20:00:00.000Z",
         status: "scheduled",
         allowsDraw: false,

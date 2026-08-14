@@ -8,6 +8,8 @@ function game(overrides: Partial<SlateGame> = {}): SlateGame {
     sport: "nfl",
     homeTeam: "Bills",
     awayTeam: "Jets",
+    homeTeamLogoUrl: null,
+    awayTeamLogoUrl: null,
     startsAt: "2026-08-13T18:00:00.000Z",
     status: "scheduled",
     allowsDraw: false,
