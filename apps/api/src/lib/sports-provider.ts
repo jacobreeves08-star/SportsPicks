@@ -17,6 +17,12 @@ export type CanonicalGameStatus = "scheduled" | "in_progress" | "final" | "postp
 export interface CanonicalTeam {
   externalId: string;
   displayName: string; // works for both "Toronto Raptors" and single-word "Arsenal"
+  // ESPN's `team.logo` — confirmed present as a plain CDN URL string
+  // across every tracked sport (NFL/NBA/MLB/soccer) against the live
+  // API. Optional/null rather than required: a provider swap or a
+  // future ESPN response shape change shouldn't be able to break
+  // schedule ingestion just because an image URL went missing.
+  logoUrl: string | null;
 }
 
 export interface CanonicalScheduleEntry {
@@ -85,6 +91,7 @@ const espnStatusTypeSchema = z.object({
 const espnTeamSchema = z.object({
   id: z.string(),
   displayName: z.string(),
+  logo: z.string().optional(),
 });
 
 const espnCompetitorSchema = z.object({
@@ -164,8 +171,8 @@ function mapEventToScheduleEntry(
     sport,
     startsAt: new Date(event.date),
     status,
-    homeTeam: { externalId: home.team.id, displayName: home.team.displayName },
-    awayTeam: { externalId: away.team.id, displayName: away.team.displayName },
+    homeTeam: { externalId: home.team.id, displayName: home.team.displayName, logoUrl: home.team.logo ?? null },
+    awayTeam: { externalId: away.team.id, displayName: away.team.displayName, logoUrl: away.team.logo ?? null },
     allowsDraw,
   };
 }

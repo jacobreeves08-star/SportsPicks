@@ -1,6 +1,12 @@
 .text {
   margin: 0;
-  font-family: inherit;
+  /* No explicit font-family here (font-family inherits by default for
+     every element `as` can render — span/p/div/h1/h2/h3, none of
+     which get a non-inherited font from a UA stylesheet) — this is
+     deliberate, not an oversight: base.css's `h1 { font-family:
+     var(--font-display) }` rule needs to win for page titles, and a
+     redundant `font-family: inherit` here as a CLASS selector would
+     out-specificity that plain element selector and silently block it. */
 }
 
 .size-xs {

@@ -51,6 +51,26 @@ describe("PickControl — structure and semantics", () => {
     expect(screen.getByRole("radio", { name: "Bills" })).toHaveAttribute("aria-checked", "true");
     expect(screen.getByRole("radio", { name: "Jets" })).toHaveAttribute("aria-checked", "false");
   });
+
+  it("renders each side's logo image, decoratively, when a logo URL is provided", () => {
+    const teamsWithLogos: PickControlTeams = {
+      ...teams,
+      homeTeamLogoUrl: "https://a.espncdn.com/i/teamlogos/nfl/500/buf.png",
+      awayTeamLogoUrl: "https://a.espncdn.com/i/teamlogos/nfl/500/nyj.png",
+    };
+    render(<PickControl teams={teamsWithLogos} state={{ status: "open", selected: null }} />);
+    const images = screen.getAllByRole("presentation", { hidden: true });
+    expect(images).toHaveLength(2);
+    expect(images.map((img) => img.getAttribute("src"))).toEqual([
+      "https://a.espncdn.com/i/teamlogos/nfl/500/buf.png",
+      "https://a.espncdn.com/i/teamlogos/nfl/500/nyj.png",
+    ]);
+  });
+
+  it("renders no logo image when a URL isn't provided", () => {
+    render(<PickControl teams={teams} state={{ status: "open", selected: null }} />);
+    expect(screen.queryByRole("presentation", { hidden: true })).not.toBeInTheDocument();
+  });
 });
 
 describe("PickControl — interactivity per status", () => {

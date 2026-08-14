@@ -1,6 +1,6 @@
 .select {
   appearance: none;
-  border: 1.5px solid rgba(18, 19, 26, 0.1);
+  border: 1.5px solid rgba(255, 255, 255, 0.1);
   border-radius: var(--radius-full);
   background-color: var(--color-surface);
   color: var(--color-text);

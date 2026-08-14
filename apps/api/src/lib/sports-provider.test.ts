@@ -97,10 +97,26 @@ describe("EspnSportsProvider.fetchSchedule", () => {
       externalId: "401816500",
       sport: "mlb",
       status: "scheduled",
-      homeTeam: { externalId: "9", displayName: "Minnesota Twins" },
-      awayTeam: { externalId: "1", displayName: "Baltimore Orioles" },
+      homeTeam: {
+        externalId: "9",
+        displayName: "Minnesota Twins",
+        logoUrl: "https://a.espncdn.com/i/teamlogos/mlb/500/scoreboard/min.png",
+      },
+      awayTeam: {
+        externalId: "1",
+        displayName: "Baltimore Orioles",
+        logoUrl: "https://a.espncdn.com/i/teamlogos/mlb/500/scoreboard/bal.png",
+      },
       allowsDraw: false,
     });
+  });
+
+  it("defaults logoUrl to null when ESPN's response omits the team's logo field", async () => {
+    stubFetchOnce([loadFixtureEvent("final-non-soccer")]);
+    const provider = newProvider();
+    const [entry] = await provider.fetchSchedule({ sport: "nfl", fromDate: "20260101", toDate: "20260101" });
+    expect(entry!.homeTeam.logoUrl).toBeNull();
+    expect(entry!.awayTeam.logoUrl).toBeNull();
   });
 
   it("maps a real final (non-soccer) event correctly", async () => {

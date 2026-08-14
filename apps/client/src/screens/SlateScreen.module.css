@@ -33,7 +33,7 @@
 .progressTrack {
   height: 8px;
   border-radius: var(--radius-full);
-  background-color: rgba(18, 19, 26, 0.08);
+  background-color: rgba(255, 255, 255, 0.08);
   overflow: hidden;
 }
 

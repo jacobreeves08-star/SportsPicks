@@ -4,7 +4,9 @@
   right: 0;
   bottom: 0;
   background-color: var(--color-surface-raised);
-  box-shadow: 0 -1px 0 rgba(18, 19, 26, 0.06), 0 -8px 24px rgba(18, 19, 26, 0.08);
+  /* A cast shadow reads as dark in both themes, unlike the hairline
+     borders/dividers elsewhere in this redesign. */
+  box-shadow: 0 -1px 0 rgba(0, 0, 0, 0.5), 0 -8px 24px rgba(0, 0, 0, 0.4);
   /* Safe-area inset so the nav (and its tap targets) clear a phone's
      home-indicator/rounded-corner area rather than sitting under it. */
   padding-bottom: env(safe-area-inset-bottom, 0);
@@ -34,7 +36,7 @@
 }
 
 .item:hover {
-  background-color: rgba(18, 19, 26, 0.04);
+  background-color: rgba(255, 255, 255, 0.04);
 }
 
 .item:focus-visible {

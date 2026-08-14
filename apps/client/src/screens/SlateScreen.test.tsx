@@ -87,6 +87,8 @@ function game(overrides: Partial<SlateGame> = {}): SlateGame {
     sport: "nfl",
     homeTeam: "Bills",
     awayTeam: "Jets",
+    homeTeamLogoUrl: null,
+    awayTeamLogoUrl: null,
     // Well within the default 7-day pick horizon, but still safely in
     // the future relative to whenever this suite actually runs — a
     // fixed far-future literal (the old value here) would now fall

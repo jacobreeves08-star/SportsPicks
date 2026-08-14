@@ -29,6 +29,15 @@ const teams: PickControlTeams = {
 
 const drawTeams: PickControlTeams = { ...teams, homeTeam: "Arsenal", awayTeam: "Chelsea", allowsDraw: true };
 
+const teamsWithLogos: PickControlTeams = {
+  homeTeam: "Cubs",
+  awayTeam: "Cardinals",
+  homeTeamLogoUrl: "https://a.espncdn.com/i/teamlogos/mlb/500/scoreboard/chc.png",
+  awayTeamLogoUrl: "https://a.espncdn.com/i/teamlogos/mlb/500/scoreboard/stl.png",
+  allowsDraw: false,
+  startsAt: "2026-08-13T18:00:00.000Z",
+};
+
 export const Unpicked: Story = {
   args: { teams, state: { status: "open", selected: null }, remainingMs: 90 * 60_000 },
 };
@@ -87,6 +96,11 @@ export const RejectedNoPriorPick: Story = {
 export const Queued: Story = {
   name: "Queued (offline, unsaved)",
   args: { teams, state: { status: "queued", queued: "Bills", previous: null } },
+};
+
+export const WithTeamLogos: Story = {
+  name: "With team logos",
+  args: { teams: teamsWithLogos, state: { status: "open", selected: null }, remainingMs: 90 * 60_000 },
 };
 
 export const DrawEligibleOpen: Story = {

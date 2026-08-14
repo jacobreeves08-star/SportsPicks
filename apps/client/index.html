@@ -3,17 +3,22 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#f7f7fb" />
+    <meta name="theme-color" content="#0a0a0b" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <!--
       font-display: swap means real text never blocks on this — the
-      system-font fallback in tokens.css's --font-sans stack renders
-      immediately and swaps to Inter once it arrives, so a cold load on
-      bad wifi (this app's own stated constraint) never shows blank text.
+      system-font fallback in tokens.css's --font-sans/--font-display
+      stacks renders immediately and swaps once the real face arrives,
+      so a cold load on bad wifi (this app's own stated constraint)
+      never shows blank text. Anton is the bold condensed display face
+      used for headlines/nav/primary buttons (tokens.css's
+      --font-display); Inter stays the body/UI face — dense standings
+      tables and form fields need a normal-width, highly legible font,
+      not the display face used for "WIN THE WATERCOOLER"-style copy.
     -->
     <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Anton&display=swap"
       rel="stylesheet"
     />
     <title>Sports Pick'em</title>

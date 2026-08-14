@@ -15,7 +15,7 @@
      definition on top of it, which is why it doesn't need to meet the
      non-text-contrast threshold that a functional boundary (an input,
      a button) does. */
-  border-color: rgba(18, 19, 26, 0.06);
+  border-color: rgba(255, 255, 255, 0.06);
 }
 
 .radius-none {

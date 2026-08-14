@@ -1,6 +1,6 @@
 .button {
   appearance: none;
-  border: 1.5px solid rgba(18, 19, 26, 0.12);
+  border: 1.5px solid rgba(255, 255, 255, 0.14);
   border-radius: var(--radius-md);
   background-color: var(--color-surface-raised);
   color: var(--color-text);
@@ -24,13 +24,15 @@
 .buttonPrimary {
   border-color: var(--color-pick-mine);
   background-color: var(--color-pick-mine);
-  color: #ffffff;
+  /* The accent is a bright lime fill now, not dark indigo — text on
+     top has to be near-black to stay readable. */
+  color: var(--color-surface);
   flex: 1;
 }
 
 .buttonPrimary:hover {
-  background-color: #372ea8;
-  border-color: #372ea8;
+  background-color: #bfe600;
+  border-color: #bfe600;
 }
 
 .link {

@@ -6,7 +6,11 @@
   align-items: center;
   justify-content: center;
   padding: var(--space-4);
-  background-color: rgba(18, 19, 26, 0.45);
+  /* A backdrop scrim dims what's BEHIND it, so this stays black
+     regardless of theme — unlike every other rgba() in this redesign
+     pass, which flipped from a dark tint (light theme) to a light tint
+     (dark theme) for subtle borders/dividers. */
+  background-color: rgba(0, 0, 0, 0.6);
 }
 
 .dialog {
@@ -36,7 +40,7 @@
 }
 
 .closeButton:hover {
-  background-color: rgba(18, 19, 26, 0.06);
+  background-color: rgba(255, 255, 255, 0.06);
 }
 
 .closeButton:focus-visible {
@@ -46,7 +50,7 @@
 
 .leagueRow {
   padding: var(--space-2) 0;
-  border-bottom: 1px solid rgba(18, 19, 26, 0.08);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .leagueRow:last-child {

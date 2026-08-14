@@ -130,6 +130,8 @@ export function SlateScreen() {
                       teams={{
                         homeTeam: game.homeTeam,
                         awayTeam: game.awayTeam,
+                        homeTeamLogoUrl: game.homeTeamLogoUrl,
+                        awayTeamLogoUrl: game.awayTeamLogoUrl,
                         allowsDraw: game.allowsDraw,
                         startsAt: game.startsAt,
                       }}
