@@ -25,7 +25,7 @@ const CONTENT = {
 export function ResultBadge({ outcome, className }: ResultBadgeProps) {
   const { Icon, label, textColor, iconClass } = CONTENT[outcome];
   return (
-    <Stack direction="row" gap={1} align="center" className={cx(styles.badge, className)}>
+    <Stack direction="row" gap={1} align="center" className={cx(styles.badge, styles[`badge-${outcome}`], className)}>
       <Icon size={16} className={iconClass} />
       <Text size="sm" weight="bold" color={textColor}>
         {label}

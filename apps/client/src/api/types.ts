@@ -33,10 +33,48 @@ export interface UserProfile {
   deletionRequestedAt: string | null;
   scheduledDeletionAt: string | null;
   createdAt: string;
+  /** The global notifications switch (Epic 10) — the read-side
+   * complement to `PATCH /users/me/notifications`. There is
+   * DELIBERATELY no per-league equivalent on any read endpoint yet —
+   * see `docs/app-shell.md`. */
+  notificationsEnabled: boolean;
 }
 
 export interface UpdateProfileResponse extends UserProfile {
   warning?: string;
+}
+
+export interface NotificationPreferenceResponse {
+  notificationsEnabled: boolean;
+}
+
+// ---- Ops / health (GET /health/data-freshness — public, unauthenticated,
+// ops-only per docs/observability.md, but polled directly by the app
+// shell's stale/degraded banners — see docs/app-shell.md for why) ------
+
+export interface JobRunStatus {
+  jobName: string;
+  lastRunAt: string | null;
+  lastRunSucceeded: boolean | null;
+  lastSuccessAt: string | null;
+}
+
+export interface LeagueSlateCompletion {
+  leagueId: string;
+  leagueName: string;
+  totalMembers: number;
+  completedCount: number;
+  rate: number | null;
+}
+
+export interface OpsSummary {
+  jobs: JobRunStatus[];
+  staleGameCount: number;
+  correctionsLast24h: number;
+  signupsLast24h: number;
+  picksLast24h: number;
+  slateCompletionRates: LeagueSlateCompletion[];
+  generatedAt: string;
 }
 
 // ---- Leagues -----------------------------------------------------------
@@ -48,6 +86,11 @@ export interface League {
   commissionerId: string;
   timezone: string;
   seasonStart: string;
+  /** How many days ahead a member can see a game as pickable — bounds
+   * both the home screen's `unpickedCount` and the actual pick-write
+   * enforcement server-side (a write beyond this rejects with
+   * `PICK_NOT_YET_OPEN`). Commissioner-configurable, 1-30, default 7. */
+  pickHorizonDays: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -74,6 +117,10 @@ export interface LeagueHomeEntry {
   rank: number;
   unpickedCount: number;
   nextLockAt: string | null;
+  /** The caller's own membership id for this league (Epic 10) — lets
+   * a client address `/:leagueId/members/:memberId/...` routes
+   * (picks, notifications) without a second round trip. */
+  leagueMemberId: string;
 }
 
 export interface LeagueMember {
@@ -260,4 +307,27 @@ export interface CorrectResultResponse {
     oldOutcome: "win" | "loss" | "void" | null;
     newOutcome: "win" | "loss" | "void" | null;
   }>;
+}
+
+// ---- Results digest ---------------------------------------------------
+
+/** One league's entry in `GET /users/me/results-digest` — the caller's
+ * own record for "yesterday" in that league. `date` is per-entry
+ * (rather than one shared date on the response) since different
+ * leagues' timezones can resolve "yesterday" to different calendar
+ * dates for the same instant. */
+export interface ResultsDigestEntry {
+  leagueId: string;
+  leagueName: string;
+  date: string;
+  wins: number;
+  losses: number;
+  gamesParticipated: number;
+  rank: number;
+}
+
+/** A league is simply absent here (never a zeroed-out entry) when the
+ * caller had no graded games there yesterday. */
+export interface ResultsDigestResponse {
+  leagues: ResultsDigestEntry[];
 }

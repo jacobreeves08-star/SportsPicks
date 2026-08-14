@@ -1,0 +1,50 @@
+.screen {
+  padding-bottom: var(--space-6);
+}
+
+.dateBar {
+  position: sticky;
+  top: calc(64px + var(--space-2));
+  z-index: 1;
+}
+
+.dateLink {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-full);
+  color: var(--color-pick-mine);
+  font-weight: 700;
+  text-decoration: none;
+  transition: background-color var(--motion-duration-fast) var(--motion-ease);
+}
+
+.dateLink:hover {
+  background-color: var(--color-pick-mine-wash);
+}
+
+.dateLink:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+.progressTrack {
+  height: 8px;
+  border-radius: var(--radius-full);
+  background-color: rgba(18, 19, 26, 0.08);
+  overflow: hidden;
+}
+
+.progressFill {
+  height: 100%;
+  border-radius: var(--radius-full);
+  background-color: var(--color-state-open);
+  transition: width var(--motion-duration-base) var(--motion-ease);
+}
+
+.sportHeading {
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}

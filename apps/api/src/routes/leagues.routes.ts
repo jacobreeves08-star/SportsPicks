@@ -159,16 +159,18 @@ export async function leaguesRoutes(app: FastifyInstance): Promise<void> {
             sports: { type: "array", items: { type: "string" }, minItems: 1 },
             timezone: { type: "string", minLength: 1 },
             seasonStart: { type: "string", format: "date" },
+            pickHorizonDays: { type: "integer", minimum: 1, maximum: 30 },
           },
         },
       },
     },
     async (request, reply) => {
-      const { name, sports, timezone, seasonStart } = request.body as {
+      const { name, sports, timezone, seasonStart, pickHorizonDays } = request.body as {
         name: string;
         sports: string[];
         timezone?: string;
         seasonStart: string;
+        pickHorizonDays?: number;
       };
       const userId = request.user!.id;
 
@@ -206,7 +208,14 @@ export async function leaguesRoutes(app: FastifyInstance): Promise<void> {
       const { createdLeague, inviteCode } = await db.transaction(async (tx) => {
         const [createdLeague] = await tx
           .insert(league)
-          .values({ name, sports, commissionerId: userId, timezone: resolvedTimezone!, seasonStart })
+          .values({
+            name,
+            sports,
+            commissionerId: userId,
+            timezone: resolvedTimezone!,
+            seasonStart,
+            ...(pickHorizonDays !== undefined && { pickHorizonDays }),
+          })
           .returning();
         await tx.insert(leagueMember).values({ userId, leagueId: createdLeague!.id, role: "commissioner" });
         const inviteCode = await insertInviteCodeWithRetry(tx as unknown as typeof db, createdLeague!.id);
@@ -315,7 +324,9 @@ export async function leaguesRoutes(app: FastifyInstance): Promise<void> {
         min(g.starts_at) as next_lock_at
       from league_member lm
       join league l on l.id = lm.league_id
-      join game g on g.sport = any(l.sports) and g.starts_at > now()
+      join game g on g.sport = any(l.sports)
+        and g.starts_at > now()
+        and g.starts_at < now() + (l.pick_horizon_days * interval '1 day')
       left join pick p on p.league_member_id = lm.id and p.game_id = g.id
       where lm.id in (${leagueMemberIdsSql}) and p.id is null
       group by lm.id
@@ -342,6 +353,13 @@ export async function leaguesRoutes(app: FastifyInstance): Promise<void> {
         rank: record?.rank ?? 1,
         unpickedCount: unpicked?.unpicked_count ?? 0,
         nextLockAt: unpicked?.next_lock_at ?? null,
+        // Epic 10: the caller's own membership id for this league —
+        // already computed above for the internal joins, just never
+        // returned before. No privacy concern (it's the caller's own
+        // id, on the caller's own "my leagues" list) — needed so a
+        // client can address `PATCH /:leagueId/members/:memberId/...`
+        // routes (picks, notifications) without a second round trip.
+        leagueMemberId: m.leagueMemberId,
       };
     });
 
@@ -459,7 +477,7 @@ export async function leaguesRoutes(app: FastifyInstance): Promise<void> {
         await requireOwnMembership(request.user!.id, leagueId, memberId);
 
         const [leagueRow] = await db
-          .select({ sports: league.sports })
+          .select({ sports: league.sports, pickHorizonDays: league.pickHorizonDays })
           .from(league)
           .where(eq(league.id, leagueId))
           .limit(1);
@@ -470,6 +488,7 @@ export async function leaguesRoutes(app: FastifyInstance): Promise<void> {
           gameId,
           selectedTeam,
           leagueSports: leagueRow!.sports,
+          pickHorizonDays: leagueRow!.pickHorizonDays,
         });
 
         if (!result.accepted) {
@@ -529,7 +548,7 @@ export async function leaguesRoutes(app: FastifyInstance): Promise<void> {
         await requireOwnMembership(request.user!.id, leagueId, memberId);
 
         const [leagueRow] = await db
-          .select({ sports: league.sports })
+          .select({ sports: league.sports, pickHorizonDays: league.pickHorizonDays })
           .from(league)
           .where(eq(league.id, leagueId))
           .limit(1);
@@ -551,6 +570,7 @@ export async function leaguesRoutes(app: FastifyInstance): Promise<void> {
                   gameId,
                   selectedTeam,
                   leagueSports: leagueRow!.sports,
+                  pickHorizonDays: leagueRow!.pickHorizonDays,
                 }),
               );
 
@@ -759,13 +779,18 @@ export async function leaguesRoutes(app: FastifyInstance): Promise<void> {
           properties: {
             name: { type: "string", minLength: 1 },
             sports: { type: "array", items: { type: "string" }, minItems: 1 },
+            pickHorizonDays: { type: "integer", minimum: 1, maximum: 30 },
           },
         },
       },
     },
     async (request) => {
       const { leagueId } = request.params as { leagueId: string };
-      const { name, sports } = request.body as { name?: string; sports?: string[] };
+      const { name, sports, pickHorizonDays } = request.body as {
+        name?: string;
+        sports?: string[];
+        pickHorizonDays?: number;
+      };
 
       await requireLeagueCommissioner(request.user!.id, leagueId);
 
@@ -797,6 +822,10 @@ export async function leaguesRoutes(app: FastifyInstance): Promise<void> {
           );
         }
         updates.sports = sports;
+      }
+
+      if (pickHorizonDays !== undefined) {
+        updates.pickHorizonDays = pickHorizonDays;
       }
 
       const [updated] = await db.update(league).set(updates).where(eq(league.id, leagueId)).returning();
@@ -910,6 +939,56 @@ export async function leaguesRoutes(app: FastifyInstance): Promise<void> {
 
       await db.update(leagueMember).set({ leftAt: nowUtc().toJSDate() }).where(eq(leagueMember.id, member.id));
       return { message: "Left the league" };
+    },
+  );
+
+  /**
+   * The per-league notification preference (JAC-43-48's
+   * `league_member.notifications_enabled`, read by pick-reminder.ts/
+   * results-summary.ts, never exposed to a client until now — see
+   * docs/notifications.md). `user.notifications_enabled` (`/me/notifications`
+   * above) is checked first server-side and short-circuits regardless
+   * of this — this switch only matters once the global one is on.
+   *
+   * WRITE-ONLY as of Epic 10 — deliberately no matching read endpoint
+   * yet. `GET /leagues/:leagueId/members` (below) is the obvious place
+   * to have added one, but it's a list of every member in the league;
+   * putting a preference this personal on it would leak one member's
+   * notification setting to every other member, which is a real
+   * privacy regression, not a minor omission. A correctly-scoped read
+   * (a caller-scoped "my own membership" route) is real, deliberate
+   * follow-up work, flagged here rather than built under time
+   * pressure — see docs/app-shell.md for how the client handles this
+   * gap in the meantime (defaults the toggle to the schema default
+   * rather than guessing).
+   */
+  app.patch(
+    "/:leagueId/members/:memberId/notifications",
+    {
+      schema: {
+        params: {
+          type: "object",
+          required: ["leagueId", "memberId"],
+          properties: { leagueId: { type: "string" }, memberId: { type: "string" } },
+        },
+        body: {
+          type: "object",
+          required: ["enabled"],
+          properties: { enabled: { type: "boolean" } },
+        },
+      },
+    },
+    async (request) => {
+      const { leagueId, memberId } = request.params as { leagueId: string; memberId: string };
+      const { enabled } = request.body as { enabled: boolean };
+
+      // Same ownership discipline as the pick-write route above — a
+      // member may only flip their OWN notification preference.
+      await requireOwnMembership(request.user!.id, leagueId, memberId);
+
+      await db.update(leagueMember).set({ notificationsEnabled: enabled }).where(eq(leagueMember.id, memberId));
+
+      return { notificationsEnabled: enabled };
     },
   );
 

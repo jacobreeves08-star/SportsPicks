@@ -1,6 +1,7 @@
 import type { Decorator, Preview } from "@storybook/react-vite";
 import { INITIAL_VIEWPORTS } from "storybook/viewport";
 import "../src/design-system/tokens/tokens.css";
+import "../src/design-system/base.css";
 
 /**
  * Epic 9's design target ("used one-handed, on a phone, in a bar") means

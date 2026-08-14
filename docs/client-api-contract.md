@@ -41,6 +41,7 @@ Base path prefixes: `/auth`, `/users`, `/leagues` (three route files share this 
 | `POST /users/me/email` | `{ newEmail }` | `{ message }` — always the same response; silently no-ops if the address is taken. |
 | `POST /users/me/change-password` | `{ currentPassword, newPassword }` | `{ message }`. `401 CURRENT_PASSWORD_INCORRECT` on mismatch. Does **not** revoke the calling session. |
 | `GET /users/me/export` | — | `{ profile, memberships: [...], picks: [...] }` |
+| `GET /users/me/results-digest` | — | `{ leagues: [{ leagueId, leagueName, date, wins, losses, gamesParticipated, rank }] }` — the caller's own record for "yesterday" in each league (resolved per-league, in that league's own timezone). A league is omitted entirely if the caller had zero graded games there yesterday. See `docs/notifications.md`. |
 | `POST /users/me/deletion-request` | — | `{ message, scheduledDeletionAt }`. Revokes every session, including the caller's own — **a client must treat this like a forced logout.** |
 | `POST /users/me/deletion-cancel` | — | `{ message }`. `409 REQUEST_ERROR` if already anonymized. |
 

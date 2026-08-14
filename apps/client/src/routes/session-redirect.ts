@@ -1,4 +1,5 @@
 import { onSessionExpired } from "../api/auth-store.js";
+import { safeReturnTo } from "./post-login-redirect.js";
 import type { AppRouter } from "./route-tree.js";
 
 /**
@@ -19,7 +20,7 @@ import type { AppRouter } from "./route-tree.js";
  */
 export function startSessionExpiryRedirect(router: AppRouter): () => void {
   return onSessionExpired(() => {
-    const returnTo = router.state.location.href;
+    const returnTo = safeReturnTo(router.state.location.href);
     void router.navigate({ to: "/login", search: { returnTo } });
   });
 }

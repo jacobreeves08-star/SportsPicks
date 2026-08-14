@@ -2,7 +2,7 @@ import type { KeyboardEvent } from "react";
 import { useEffect, useRef, useState } from "react";
 import { Spinner } from "../feedback/Spinner.js";
 import { CheckIcon, CloudOffIcon } from "../icons/index.js";
-import { LockBadge, ResultBadge, VoidBadge } from "../indicators/index.js";
+import { LockBadge, NotYetOpenBadge, ResultBadge, VoidBadge } from "../indicators/index.js";
 import { Countdown } from "../primitives/Countdown.js";
 import { Text } from "../primitives/Text.js";
 import { cx } from "../utils/cx.js";
@@ -32,6 +32,7 @@ function sidesFor(teams: PickControlTeams): string[] {
 function selectedTeamFor(state: PickControlState): string | null {
   switch (state.status) {
     case "open":
+    case "not-yet-open":
     case "locked":
     case "final":
     case "void":
@@ -156,8 +157,8 @@ export function PickControl({ teams, state, onSelect, remainingMs, className }: 
                 isWinner && styles.sideWinner,
               )}
             >
-              {describeSide(team)}
-              {isWinner ? <CheckIcon size={14} /> : null}
+              <span className={styles.sideLabel}>{describeSide(team)}</span>
+              {isSelected || isWinner ? <CheckIcon size={15} className={styles.sideCheck} /> : null}
             </button>
           );
         })}
@@ -178,6 +179,12 @@ function StatusRow({ state, remainingMs }: { state: PickControlState; remainingM
       return remainingMs === undefined ? null : (
         <div className={styles.statusRow}>
           <Countdown remainingMs={remainingMs} size="sm" color="dim" />
+        </div>
+      );
+    case "not-yet-open":
+      return (
+        <div className={styles.statusRow}>
+          <NotYetOpenBadge opensAt={state.opensAt} />
         </div>
       );
     case "locked":

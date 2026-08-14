@@ -3,6 +3,19 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#f7f7fb" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!--
+      font-display: swap means real text never blocks on this — the
+      system-font fallback in tokens.css's --font-sans stack renders
+      immediately and swaps to Inter once it arrives, so a cold load on
+      bad wifi (this app's own stated constraint) never shows blank text.
+    -->
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
     <title>Sports Pick'em</title>
   </head>
   <body>

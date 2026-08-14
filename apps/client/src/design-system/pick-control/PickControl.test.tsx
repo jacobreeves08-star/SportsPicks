@@ -17,6 +17,7 @@ const drawTeams: PickControlTeams = { ...teams, homeTeam: "Arsenal", awayTeam: "
 const ALL_STATES: PickControlState[] = [
   { status: "open", selected: null },
   { status: "open", selected: "Bills" },
+  { status: "not-yet-open", selected: null, opensAt: "2026-08-20T00:00:00.000Z" },
   { status: "locked", selected: "Jets" },
   { status: "final", selected: "Bills", winningTeam: "Bills", outcome: "hit" },
   { status: "final", selected: "Jets", winningTeam: "Bills", outcome: "miss" },
@@ -63,6 +64,16 @@ describe("PickControl — interactivity per status", () => {
   it("locked: clicking a side does NOT call onSelect, and is aria-disabled", () => {
     const onSelect = vi.fn();
     render(<PickControl teams={teams} state={{ status: "locked", selected: "Bills" }} onSelect={onSelect} />);
+    const side = screen.getByRole("radio", { name: "Jets" });
+    expect(side).toHaveAttribute("aria-disabled", "true");
+    fireEvent.click(side);
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it("not-yet-open: clicking a side does NOT call onSelect, and is aria-disabled", () => {
+    const onSelect = vi.fn();
+    const state: PickControlState = { status: "not-yet-open", selected: null, opensAt: "2026-08-20T00:00:00.000Z" };
+    render(<PickControl teams={teams} state={state} onSelect={onSelect} />);
     const side = screen.getByRole("radio", { name: "Jets" });
     expect(side).toHaveAttribute("aria-disabled", "true");
     fireEvent.click(side);
@@ -150,6 +161,12 @@ describe("PickControl — status row content", () => {
   it("final miss renders 'Incorrect'", () => {
     render(<PickControl teams={teams} state={{ status: "final", selected: "Jets", winningTeam: "Bills", outcome: "miss" }} />);
     expect(screen.getByText("Incorrect")).toBeInTheDocument();
+  });
+
+  it("not-yet-open renders an opens-on badge, formatted as an absolute date", () => {
+    const state: PickControlState = { status: "not-yet-open", selected: null, opensAt: "2026-08-20T00:00:00.000Z" };
+    render(<PickControl teams={teams} state={state} />);
+    expect(screen.getByText(/^Opens /)).toBeInTheDocument();
   });
 
   it("void renders the reason-specific badge text", () => {

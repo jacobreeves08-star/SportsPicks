@@ -1,0 +1,47 @@
+.shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background-color: var(--color-surface);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background-color: var(--color-surface-raised);
+  box-shadow: 0 1px 0 rgba(18, 19, 26, 0.06), 0 6px 20px rgba(18, 19, 26, 0.04);
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.brand {
+  text-decoration: none;
+  color: var(--color-pick-mine);
+  flex-shrink: 0;
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.brand:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+.main {
+  flex: 1;
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: var(--space-4);
+  /* Clears the fixed BottomNav (BottomNav.module.css) — the nav is
+     the one element in this shell allowed to float over content;
+     everything else (including this reserved padding) makes sure
+     nothing real ever ends up underneath it. */
+  padding-bottom: calc(48px + var(--space-6) + env(safe-area-inset-bottom, 0px));
+}

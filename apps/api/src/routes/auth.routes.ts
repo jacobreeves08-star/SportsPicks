@@ -20,8 +20,22 @@ function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
+/**
+ * Points at the CLIENT (`PUBLIC_CLIENT_URL`), not this API
+ * (`PUBLIC_API_URL`) — a real, now-fixed contract gap found while
+ * building the client's own landing screens for these three links
+ * (Epic 11). The API's own `GET /auth/verify-email` etc. return raw
+ * JSON with no rendered page at all; a user clicking an emailed link
+ * built against `PUBLIC_API_URL` would see that JSON directly instead
+ * of a page telling them what happened. `PUBLIC_CLIENT_URL` already
+ * existed (added in Epic 8 for CORS) — no new env var needed. Each
+ * `kind` string is deliberately also the exact client route path
+ * (`/verify-email`, `/verify-email-change`, `/password-reset/confirm`
+ * — see `apps/client/src/routes/route-tree.tsx`), which is what makes
+ * every kind reusable here unchanged.
+ */
 function verificationLink(kind: "verify-email" | "verify-email-change" | "password-reset/confirm", token: string) {
-  return `${env.PUBLIC_API_URL}/auth/${kind}?token=${encodeURIComponent(token)}`;
+  return `${env.PUBLIC_CLIENT_URL}/${kind}?token=${encodeURIComponent(token)}`;
 }
 
 export async function authRoutes(app: FastifyInstance): Promise<void> {

@@ -9,25 +9,36 @@
  *
  * Tokens are named by MEANING, never by hue — `--color-result-miss`,
  * not `--color-red`. A future re-theme only ever touches this file.
+ *
+ * Visual language (redesign pass): a crisp indigo accent, cool-neutral
+ * surfaces, soft layered shadows instead of hard borders for depth,
+ * and a wider radius scale — the "sleek SaaS" register (Linear/Vercel/
+ * Stripe), chosen because this app's own density (dense standings
+ * tables, a 10-game slate) benefits from calm neutrals and one
+ * confident accent color rather than a busy, saturated palette.
  */
 :root {
+  /* Type */
+  --font-sans:
+    "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+
   /* Surfaces */
-  --color-surface: #f4f5f7;
+  --color-surface: #f7f7fb;
   --color-surface-raised: #ffffff;
-  --color-border: #7c8494;
+  --color-border: #6b7280;
 
   /* Text */
-  --color-text: #14181f;
-  --color-text-dim: #5a6270;
+  --color-text: #12131a;
+  --color-text-dim: #585e6e;
 
   /* Semantic state/result colors — each is paired with a non-color
      signal (icon/weight/text) by the component that uses it; see
      indicators/. Never rely on hue alone anywhere in this app. */
-  --color-pick-mine: #2453ff;
-  --color-result-hit: #1b7a3d;
-  --color-result-miss: #b3261e;
+  --color-pick-mine: #4338ca;
+  --color-result-hit: #15803d;
+  --color-result-miss: #c0271b;
   --color-state-locked: #8a5a00;
-  --color-state-open: #157a6e;
+  --color-state-open: #0f766e;
   --color-state-stale: #47536b;
 
   /* Not one of the Epic 9 brief's named tokens, added deliberately:
@@ -37,10 +48,21 @@
      hue" cuts both ways. Keeping them separate tokens means a future
      re-theme of "what red means for a network error" can diverge from
      "what red means for a wrong pick" without a collateral change. */
-  --color-error: #b3261e;
+  --color-error: #c0271b;
 
   /* Focus */
-  --color-focus-ring: #2453ff;
+  --color-focus-ring: #4338ca;
+
+  /* A soft accent wash for selected/active states (chips, the
+     PickControl's selected side, an active nav item) — a tinted fill
+     rather than the solid accent, which stays reserved for text/icons
+     and primary buttons so it doesn't get visually diluted. Derived
+     from --color-pick-mine at low opacity; kept as its own token
+     (rather than an inline rgba() scattered across component CSS)
+     for the same "one source of truth" reason every other token
+     exists. */
+  --color-pick-mine-wash: rgba(67, 56, 202, 0.08);
+  --color-pick-mine-wash-strong: rgba(67, 56, 202, 0.14);
 
   /* Spacing — 4px base, widening at the top (matches how this app's
      rows/sections actually grow, not a pure linear multiple). */
@@ -53,23 +75,28 @@
   --space-7: 48px;
   --space-8: 64px;
 
-  /* Radius */
-  --radius-sm: 4px;
-  --radius-md: 8px;
-  --radius-lg: 16px;
+  /* Radius — wider than a typical utilitarian scale on purpose; soft,
+     rounded corners throughout (cards, controls, badges) are the
+     single biggest lever for "sleek" over "generic form UI". */
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 22px;
   --radius-full: 9999px;
 
   /* Elevation — box-shadow tokens, not raw shadow values inline
-     anywhere else. */
+     anywhere else. Soft, layered, low-opacity — depth without a hard
+     edge, so a card reads as "lifted" even where its border all but
+     disappears. */
   --elevation-0: none;
-  --elevation-1: 0 1px 2px rgba(20, 24, 31, 0.08), 0 1px 1px rgba(20, 24, 31, 0.04);
-  --elevation-2: 0 4px 12px rgba(20, 24, 31, 0.12);
+  --elevation-1: 0 1px 2px rgba(18, 19, 26, 0.04), 0 3px 10px rgba(18, 19, 26, 0.06);
+  --elevation-2: 0 4px 10px rgba(18, 19, 26, 0.06), 0 12px 32px rgba(18, 19, 26, 0.12);
 
   /* Motion — every transition in the design system reads these
      instead of a literal duration, so both triggers below can zero
      them out in one place. */
   --motion-duration-fast: 120ms;
   --motion-duration-base: 200ms;
+  --motion-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 /**

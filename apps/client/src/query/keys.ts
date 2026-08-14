@@ -22,4 +22,15 @@ export const queryKeys = {
   members: (leagueId: string) => ["leagues", leagueId, "members"] as const,
   auditLog: (leagueId: string) => ["leagues", leagueId, "audit-log"] as const,
   inviteCode: (leagueId: string) => ["leagues", leagueId, "invite-code"] as const,
+  /** Epic 11 — the public/optionally-authenticated join preview
+   * (`GET /leagues/preview?code=`), keyed by the invite code itself
+   * rather than a leagueId (unknown until this resolves). */
+  invitePreview: (code: string) => ["invite-preview", code] as const,
+  /** Epic 10 — the global banner system's slow background poll. Not
+   * scoped to any league (the underlying endpoint isn't either). */
+  dataFreshness: () => ["health", "data-freshness"] as const,
+  healthPing: () => ["health", "ping"] as const,
+  /** The caller's own "yesterday, across every league" digest — not
+   * scoped to any one league (the underlying endpoint isn't either). */
+  resultsDigest: () => ["users", "me", "results-digest"] as const,
 };

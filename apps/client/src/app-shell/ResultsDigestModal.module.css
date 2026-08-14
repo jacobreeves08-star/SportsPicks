@@ -1,0 +1,54 @@
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+  background-color: rgba(18, 19, 26, 0.45);
+}
+
+.dialog {
+  width: 100%;
+  max-width: 400px;
+}
+
+.header {
+  position: relative;
+}
+
+.closeButton {
+  appearance: none;
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: var(--radius-full);
+  background: none;
+  color: var(--color-text-dim);
+  cursor: pointer;
+}
+
+.closeButton:hover {
+  background-color: rgba(18, 19, 26, 0.06);
+}
+
+.closeButton:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+.leagueRow {
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid rgba(18, 19, 26, 0.08);
+}
+
+.leagueRow:last-child {
+  border-bottom: none;
+}

@@ -22,7 +22,10 @@ import type {
   LeagueMemberReport,
   LeagueWithMemberCount,
   MessageResponse,
+  NotificationPreferenceResponse,
+  OpsSummary,
   Paginated,
+  ResultsDigestResponse,
   SlateResponse,
   StandingsResponse,
   StandingsTimeframe,
@@ -84,6 +87,12 @@ export function requestEmailChange(newEmail: string): Promise<MessageResponse> {
   return apiFetch("/users/me/email", { method: "POST", body: { newEmail } });
 }
 
+/** The global notifications off switch (Epic 10 — added alongside the
+ * client that first needed it; see docs/notifications.md). */
+export function updateGlobalNotifications(enabled: boolean): Promise<NotificationPreferenceResponse> {
+  return apiFetch("/users/me/notifications", { method: "PATCH", body: { enabled } });
+}
+
 export function changePassword(body: { currentPassword: string; newPassword: string }): Promise<MessageResponse> {
   return apiFetch("/users/me/change-password", { method: "POST", body });
 }
@@ -96,6 +105,12 @@ export function cancelAccountDeletion(): Promise<MessageResponse> {
   return apiFetch("/users/me/deletion-cancel", { method: "POST" });
 }
 
+/** The caller's own "yesterday" record per league — see
+ * docs/notifications.md's `GET /users/me/results-digest` section. */
+export function getResultsDigest(): Promise<ResultsDigestResponse> {
+  return apiFetch("/users/me/results-digest");
+}
+
 // ---- Leagues -----------------------------------------------------------
 
 export function createLeague(body: {
@@ -103,6 +118,7 @@ export function createLeague(body: {
   sports: string[];
   timezone?: string;
   seasonStart: string;
+  pickHorizonDays?: number;
 }): Promise<CreatedLeague> {
   return apiFetch("/leagues", { method: "POST", body });
 }
@@ -117,7 +133,10 @@ export function getLeague(leagueId: string): Promise<LeagueWithMemberCount> {
   return apiFetch(`/leagues/${leagueId}`);
 }
 
-export function updateLeague(leagueId: string, body: { name?: string; sports?: string[] }): Promise<LeagueWithMemberCount> {
+export function updateLeague(
+  leagueId: string,
+  body: { name?: string; sports?: string[]; pickHorizonDays?: number },
+): Promise<LeagueWithMemberCount> {
   return apiFetch(`/leagues/${leagueId}`, { method: "PATCH", body });
 }
 
@@ -143,6 +162,17 @@ export function getMembers(leagueId: string, params: { limit?: number; cursor?: 
 
 export function reportMember(leagueId: string, memberId: string, reason: string): Promise<LeagueMemberReport> {
   return apiFetch(`/leagues/${leagueId}/members/${memberId}/report`, { method: "POST", body: { reason } });
+}
+
+/** The per-league notification preference (Epic 10). Distinct from
+ * `updateGlobalNotifications` — the global switch is checked first
+ * server-side and short-circuits regardless of this one. */
+export function updateLeagueNotifications(
+  leagueId: string,
+  memberId: string,
+  enabled: boolean,
+): Promise<NotificationPreferenceResponse> {
+  return apiFetch(`/leagues/${leagueId}/members/${memberId}/notifications`, { method: "PATCH", body: { enabled } });
 }
 
 export function getReports(leagueId: string): Promise<LeagueMemberReport[]> {
@@ -235,4 +265,11 @@ export function joinLeague(code: string): Promise<JoinedLeague> {
 
 export function pingHealth(): Promise<{ status: string }> {
   return apiFetch("/health", { auth: false });
+}
+
+/** Ops-only per docs/observability.md, but public/unauthenticated by
+ * design — "the hook a future stale-data banner would poll." That
+ * banner is this epic's app-shell/banners/, see docs/app-shell.md. */
+export function getDataFreshness(): Promise<OpsSummary> {
+  return apiFetch("/health/data-freshness", { auth: false });
 }

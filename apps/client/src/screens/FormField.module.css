@@ -1,0 +1,31 @@
+.input {
+  appearance: none;
+  width: 100%;
+  min-height: 48px;
+  padding: var(--space-2) var(--space-3);
+  border: 1.5px solid rgba(18, 19, 26, 0.12);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface-raised);
+  color: var(--color-text);
+  font: inherit;
+  transition: border-color var(--motion-duration-fast) var(--motion-ease), box-shadow var(--motion-duration-fast) var(--motion-ease);
+}
+
+.input:hover {
+  border-color: rgba(18, 19, 26, 0.22);
+}
+
+.input:focus-visible {
+  outline: none;
+  border-color: var(--color-pick-mine);
+  box-shadow: 0 0 0 4px var(--color-pick-mine-wash);
+}
+
+.inputError {
+  border-color: var(--color-error);
+}
+
+.inputError:focus-visible {
+  border-color: var(--color-error);
+  box-shadow: 0 0 0 4px rgba(192, 39, 27, 0.12);
+}

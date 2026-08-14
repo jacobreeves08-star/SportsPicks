@@ -1,0 +1,117 @@
+.screen {
+  padding-bottom: var(--space-6);
+}
+
+.dateLink {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-full);
+  color: var(--color-pick-mine);
+  font-weight: 700;
+  text-decoration: none;
+  transition: background-color var(--motion-duration-fast) var(--motion-ease);
+}
+
+.dateLink:hover {
+  background-color: var(--color-pick-mine-wash);
+}
+
+.dateLink:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+/* A games x members grid is inherently wide with more than a couple
+   members — scrolls horizontally within its own container rather than
+   ever widening the page itself (320px-width requirement). */
+.tableScroll {
+  overflow-x: auto;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--elevation-1);
+  background-color: var(--color-surface-raised);
+}
+
+.table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.table th,
+.table td {
+  padding: var(--space-3);
+  text-align: left;
+  border-bottom: 1px solid rgba(18, 19, 26, 0.06);
+  white-space: nowrap;
+}
+
+.table thead th {
+  position: sticky;
+  top: 0;
+  background-color: var(--color-surface-raised);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-dim);
+  border-bottom: 1.5px solid rgba(18, 19, 26, 0.1);
+}
+
+.table tbody tr:last-child td,
+.table tbody tr:last-child th {
+  border-bottom: none;
+}
+
+.table tbody tr:hover td,
+.table tbody tr:hover th {
+  background-color: rgba(18, 19, 26, 0.02);
+}
+
+.gameCell {
+  white-space: normal;
+  min-width: 160px;
+  background-color: inherit;
+}
+
+.pickCell {
+  min-width: 92px;
+}
+
+/* Highlighted, never just a subtle color shift — the badge text in
+   the row itself already carries the meaning; these just anchor it
+   visually. allWrong takes precedence over split when a row is
+   somehow both (handled by the caller choosing one class). */
+.splitRow td,
+.splitRow th {
+  background-color: rgba(67, 56, 202, 0.04);
+}
+
+.allWrongRow td,
+.allWrongRow th {
+  background-color: rgba(192, 39, 27, 0.05);
+}
+
+.allWrongRow .gameCell {
+  box-shadow: inset 3px 0 0 var(--color-error);
+}
+
+.splitRow .gameCell {
+  box-shadow: inset 3px 0 0 var(--color-pick-mine);
+}
+
+.splitBadge,
+.allWrongBadge {
+  display: inline-flex;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-full);
+  letter-spacing: 0.03em;
+}
+
+.splitBadge {
+  background-color: var(--color-pick-mine-wash);
+}
+
+.allWrongBadge {
+  background-color: rgba(192, 39, 27, 0.1);
+}

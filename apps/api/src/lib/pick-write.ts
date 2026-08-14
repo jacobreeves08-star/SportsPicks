@@ -13,7 +13,8 @@ export type PickWriteRejectionReason =
   | "GAME_CANCELED"
   | "GAME_POSTPONED"
   | "INVALID_TEAM_SELECTION"
-  | "PICK_LOCKED";
+  | "PICK_LOCKED"
+  | "PICK_BEYOND_HORIZON";
 
 export interface WrittenPick {
   id: string;
@@ -47,8 +48,12 @@ export type PickWriteResult =
  * and tripping check_pick_selected_team's own exception — critical for
  * the batch endpoint, where a thrown SQL error (not just a rejected
  * write) would abort the whole shared transaction. Phase 1's own
- * `now() >= startsAt` check is a fast-path courtesy only (skips a
- * round trip for an obviously-locked game) — it is NOT the enforcement.
+ * `now() >= startsAt` AND `startsAt >= now() + pickHorizonDays` checks
+ * are a fast-path courtesy only (skip a round trip for an obviously-
+ * locked or obviously-too-far-out game) — neither is the enforcement.
+ * The horizon bound can never newly fail between phase 1 and phase 2
+ * (it only gets MORE permissive as real time advances, unlike the lock
+ * bound, which can newly fail) — see the `if (!row)` fallback below.
  *
  * Phase 2 is the one real enforcement point: a single atomic statement
  * that re-reads starts_at fresh as part of the very same statement (so
@@ -65,9 +70,16 @@ export type PickWriteResult =
  */
 export async function writePick(
   executor: typeof db,
-  params: { leagueId: string; leagueMemberId: string; gameId: string; selectedTeam: string; leagueSports: string[] },
+  params: {
+    leagueId: string;
+    leagueMemberId: string;
+    gameId: string;
+    selectedTeam: string;
+    leagueSports: string[];
+    pickHorizonDays: number;
+  },
 ): Promise<PickWriteResult> {
-  const { leagueId, leagueMemberId, gameId, selectedTeam, leagueSports } = params;
+  const { leagueId, leagueMemberId, gameId, selectedTeam, leagueSports, pickHorizonDays } = params;
 
   const [gameRow] = await executor.select().from(game).where(eq(game.id, gameId)).limit(1);
 
@@ -104,6 +116,18 @@ export async function writePick(
   if (nowUtc().toJSDate() >= gameRow.startsAt) {
     return { accepted: false, reason: "PICK_LOCKED", message: "Picking has closed for this game" };
   }
+  // Same "fast-path courtesy only" caveat as the lock check above —
+  // the real enforcement is phase 2's atomic SQL bound below, re-read
+  // fresh at write time. Rolling window from now, not calendar-day
+  // aligned (mirrors PICK_LOCKED's own "as of this instant" framing,
+  // not a day-boundary concept the league's timezone would matter for).
+  if (gameRow.startsAt >= nowUtc().plus({ days: pickHorizonDays }).toJSDate()) {
+    return {
+      accepted: false,
+      reason: "PICK_BEYOND_HORIZON",
+      message: `Picks for this game open within ${pickHorizonDays} day${pickHorizonDays === 1 ? "" : "s"} of kickoff`,
+    };
+  }
 
   // NOTE: db.execute()'s raw path returns timestamptz columns as
   // Postgres's text representation, not a JS Date (confirmed
@@ -124,7 +148,10 @@ export async function writePick(
       select ${leagueMemberId}, ${gameId}, ${selectedTeam}
       where exists (
         select 1 from game
-        where id = ${gameId} and starts_at > now() and status not in ('canceled', 'postponed')
+        where id = ${gameId}
+          and starts_at > now()
+          and starts_at < now() + (${pickHorizonDays} * interval '1 day')
+          and status not in ('canceled', 'postponed')
       )
       on conflict (league_member_id, game_id) do update set selected_team = excluded.selected_team
       returning id, league_member_id, game_id, selected_team, created_at, (xmax = 0) as was_insert
@@ -223,5 +250,7 @@ export function rejectionToApiError(
       return new ApiError("GAME_POSTPONED", message, 409);
     case "PICK_LOCKED":
       return new ApiError("PICK_LOCKED", message, 409);
+    case "PICK_BEYOND_HORIZON":
+      return new ApiError("PICK_NOT_YET_OPEN", message, 409);
   }
 }

@@ -35,6 +35,16 @@ export interface PickControlTeams {
 
 export type PickControlState =
   | { status: "open"; selected: string | null }
+  /** Further out than the league's own `pickHorizonDays` — visible on
+   * the slate (never hidden, per docs/leagues-and-membership.md's
+   * confirmed UX) but not yet writable. `opensAt` is when picking
+   * opens for THIS game (a container's `startsAt` minus the league's
+   * horizon), not `teams.startsAt` itself. Always `selected: null` in
+   * practice (a game beyond the horizon can never have an existing
+   * pick — the horizon bound only ever loosens over time, never
+   * tightens past an already-accepted write), but kept as `string |
+   * null` for the same symmetry every other status here has. */
+  | { status: "not-yet-open"; selected: string | null; opensAt: string }
   | { status: "locked"; selected: string | null }
   /**
    * `outcome` is `"hit" | "miss"`, never a third value —

@@ -18,20 +18,27 @@ export function Surface({
   as = "div",
   variant = "surface",
   radius = "md",
-  elevation = 0,
+  elevation,
   padding,
   className,
   children,
   ...rest
 }: SurfaceProps) {
   const Component = as as ElementType;
+  // A "raised" surface reads as a card and gets a soft shadow by
+  // default — requiring every call site to separately opt in via
+  // `elevation` for the one variant whose whole point is looking
+  // lifted off the page is friction a design system shouldn't impose.
+  // Still fully overridable (a caller can pass `elevation={0}` to flatten
+  // a raised surface deliberately, e.g. inside another card).
+  const resolvedElevation = elevation ?? (variant === "raised" ? 1 : 0);
   return (
     <Component
       className={cx(
         styles.surface,
         styles[`variant-${variant}`],
         styles[`radius-${radius}`],
-        styles[`elevation-${elevation}`],
+        styles[`elevation-${resolvedElevation}`],
         padding !== undefined && styles[`padding-${padding}`],
         className,
       )}

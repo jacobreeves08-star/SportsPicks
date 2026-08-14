@@ -49,12 +49,16 @@ Each eligible recipient (active, notifications enabled globally and per-league) 
 
 **Flagged, not fixed**: score-poll's automatic revision detection re-checks final games for up to `REVISION_CHECK_WINDOW_HOURS` (default 48h) after `result.created_at` (see `docs/scoring-and-standings.md`). If a provider revision lands **after** today's digest already sent, the per-member-per-day `notification_log` guard means no second digest goes out for that day — a member's emailed standings can go stale relative to a correction they were never told about. Accepted limitation, not addressed this epic.
 
+### `GET /users/me/results-digest` — the in-app counterpart
+
+Added alongside the client's daily results pop-up (shown once per app open per day, dismissible, with a share action). Deliberately calls the exact same `computeStandings(leagueId, 'today', yesterday)` this job already calls — not a second, parallel computation — so the emailed digest and the in-app pop-up can never numerically disagree. Unlike the email job, this is a plain authenticated read (no `notification_log` reservation, no eligibility/preference filtering — it's the caller asking for their own data, not a push), and "yesterday" is resolved **per league, in that league's own timezone**, using the identical two-step formula this file's job uses above (`today` in the league's zone, then `.minus({ days: 1 })`) — two leagues in different timezones can genuinely disagree on what calendar date "yesterday" was at the same instant. A league is omitted from the response (not returned with zeros) when the caller had zero graded games there yesterday.
+
 ## Preferences
 
 - `user.notifications_enabled` (default `true`) — the global off switch. Checked first; `false` here means neither job ever emails that user, regardless of any league's setting.
 - `league_member.notifications_enabled` (default `true`) — per-league. Lets a member mute one league's notifications without going fully dark everywhere.
 
-Neither job has a UI to flip these yet (no frontend exists) — both are plain columns, settable via a future settings endpoint or directly for now.
+**Client-wired as of Epic 10** (`docs/app-shell.md`'s "Notifications" section has the full story): `PATCH /users/me/notifications` and `PATCH /leagues/:leagueId/members/:memberId/notifications` (both `apps/api`, guarded by the same `requireOwnMembership` check pick-writes use) expose these two columns to a real client UI — `apps/client/src/notifications/PreferencesForm.tsx`, mounted from the profile screen. `GET /users/me` also gained `notificationsEnabled` in its response (it's the caller's own resource) so the global toggle can reflect the real current value. **The per-league value has no read endpoint yet** — deliberately not added to the members list route, since that would leak one member's preference to every other member; the client's per-league toggles default to the schema default (`true`) via local state rather than a live read until a correctly-scoped "my own membership" read route exists. Writes are fully real either way.
 
 ## Operator digest — a third job, not a member-facing one
 

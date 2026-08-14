@@ -37,6 +37,7 @@ describe("writePick — happy path", () => {
       gameId: game.id,
       selectedTeam: "Bills",
       leagueSports: league.sports,
+      pickHorizonDays: league.pickHorizonDays,
     });
 
     expect(result.accepted).toBe(true);
@@ -60,6 +61,7 @@ describe("writePick — happy path", () => {
       gameId: game.id,
       selectedTeam: "Bills",
       leagueSports: league.sports,
+      pickHorizonDays: league.pickHorizonDays,
     });
     const second = await writePick(db, {
       leagueId: league.id,
@@ -67,6 +69,7 @@ describe("writePick — happy path", () => {
       gameId: game.id,
       selectedTeam: "Jets",
       leagueSports: league.sports,
+      pickHorizonDays: league.pickHorizonDays,
     });
 
     expect(second.accepted).toBe(true);
@@ -97,6 +100,7 @@ describe("writePick — happy path", () => {
       gameId: soccerGame.id,
       selectedTeam: "DRAW",
       leagueSports: [...league.sports, "epl"],
+      pickHorizonDays: league.pickHorizonDays,
     });
     expect(result.accepted).toBe(true);
   });
@@ -111,6 +115,7 @@ describe("writePick — pre-validated rejections (no SQL exception, no audit row
       gameId: "00000000-0000-0000-0000-000000000099",
       selectedTeam: "Bills",
       leagueSports: league.sports,
+      pickHorizonDays: league.pickHorizonDays,
     });
     expect(result).toMatchObject({ accepted: false, reason: "GAME_NOT_FOUND" });
   });
@@ -124,6 +129,7 @@ describe("writePick — pre-validated rejections (no SQL exception, no audit row
       gameId: mlbGame.id,
       selectedTeam: "Yankees",
       leagueSports: ["nfl"], // league only covers nfl
+      pickHorizonDays: league.pickHorizonDays,
     });
     expect(result).toMatchObject({ accepted: false, reason: "GAME_NOT_IN_LEAGUE_SPORTS" });
   });
@@ -136,6 +142,7 @@ describe("writePick — pre-validated rejections (no SQL exception, no audit row
       gameId: game.id,
       selectedTeam: "Bills",
       leagueSports: league.sports,
+      pickHorizonDays: league.pickHorizonDays,
     });
     expect(result).toMatchObject({ accepted: false, reason: "GAME_CANCELED" });
   });
@@ -148,6 +155,7 @@ describe("writePick — pre-validated rejections (no SQL exception, no audit row
       gameId: game.id,
       selectedTeam: "Bills",
       leagueSports: league.sports,
+      pickHorizonDays: league.pickHorizonDays,
     });
     expect(result).toMatchObject({ accepted: false, reason: "GAME_POSTPONED" });
   });
@@ -160,6 +168,7 @@ describe("writePick — pre-validated rejections (no SQL exception, no audit row
       gameId: game.id,
       selectedTeam: "Cowboys",
       leagueSports: league.sports,
+      pickHorizonDays: league.pickHorizonDays,
     });
     expect(result).toMatchObject({ accepted: false, reason: "INVALID_TEAM_SELECTION" });
 
@@ -178,6 +187,7 @@ describe("writePick — pre-validated rejections (no SQL exception, no audit row
       gameId: game.id,
       selectedTeam: "DRAW",
       leagueSports: league.sports,
+      pickHorizonDays: league.pickHorizonDays,
     });
     expect(result).toMatchObject({ accepted: false, reason: "INVALID_TEAM_SELECTION" });
   });
@@ -192,6 +202,7 @@ describe("writePick — lock enforcement", () => {
       gameId: game.id,
       selectedTeam: "Bills",
       leagueSports: league.sports,
+      pickHorizonDays: league.pickHorizonDays,
     });
     expect(result).toMatchObject({ accepted: false, reason: "PICK_LOCKED" });
   });
@@ -210,7 +221,66 @@ describe("writePick — lock enforcement", () => {
       gameId: game.id,
       selectedTeam: "Bills",
       leagueSports: league.sports,
+      pickHorizonDays: league.pickHorizonDays,
     });
     expect(result).toMatchObject({ accepted: false, reason: "PICK_LOCKED" });
+  });
+});
+
+describe("writePick — pick horizon enforcement", () => {
+  it("rejects a game further out than the league's pick horizon (fast path, pre-check)", async () => {
+    const { member, league, game } = await setup({ startsAt: hoursFromNow(24 * 10) }); // 10 days out
+    const result = await writePick(db, {
+      leagueId: league.id,
+      leagueMemberId: member.id,
+      gameId: game.id,
+      selectedTeam: "Bills",
+      leagueSports: league.sports,
+      pickHorizonDays: 7, // narrower than the game's 10 days out
+    });
+    expect(result).toMatchObject({ accepted: false, reason: "PICK_BEYOND_HORIZON" });
+
+    const picks = await db.select().from(pick).where(eq(pick.gameId, game.id));
+    expect(picks).toHaveLength(0);
+  });
+
+  it("accepts a game right at the horizon boundary", async () => {
+    const { member, league, game } = await setup({ startsAt: hoursFromNow(24 * 3) }); // 3 days out
+    const result = await writePick(db, {
+      leagueId: league.id,
+      leagueMemberId: member.id,
+      gameId: game.id,
+      selectedTeam: "Bills",
+      leagueSports: league.sports,
+      pickHorizonDays: 7, // well within a 7-day horizon
+    });
+    expect(result.accepted).toBe(true);
+  });
+
+  it("re-reads the CURRENT horizon at write time — a league that widens its horizon between requests immediately allows the write", async () => {
+    const { member, league, game } = await setup({ startsAt: hoursFromNow(24 * 10) }); // 10 days out
+
+    const rejected = await writePick(db, {
+      leagueId: league.id,
+      leagueMemberId: member.id,
+      gameId: game.id,
+      selectedTeam: "Bills",
+      leagueSports: league.sports,
+      pickHorizonDays: 7,
+    });
+    expect(rejected).toMatchObject({ accepted: false, reason: "PICK_BEYOND_HORIZON" });
+
+    // Same call, now passing a wider horizon — exactly what a route
+    // handler re-fetching the league row on the next request would see
+    // after a commissioner widens it via PATCH /:leagueId.
+    const accepted = await writePick(db, {
+      leagueId: league.id,
+      leagueMemberId: member.id,
+      gameId: game.id,
+      selectedTeam: "Bills",
+      leagueSports: league.sports,
+      pickHorizonDays: 14,
+    });
+    expect(accepted.accepted).toBe(true);
   });
 });

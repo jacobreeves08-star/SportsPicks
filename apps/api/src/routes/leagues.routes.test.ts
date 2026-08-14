@@ -36,6 +36,21 @@ function auth(token: string) {
  * real HTTP through app.inject(), not by calling the authorization
  * helpers directly (that's covered separately in lib/authorization.test.ts).
  */
+describe("GET /leagues — my leagues", () => {
+  it("includes the caller's own leagueMemberId for each league (Epic 10)", async () => {
+    const owner = await createTestUser();
+    const league = await createTestLeague(owner.id);
+    const member = await createTestLeagueMember(owner.id, league.id, { role: "commissioner" });
+
+    const token = await tokenFor(owner.id);
+    const res = await app.inject({ method: "GET", url: "/leagues", headers: auth(token) });
+
+    expect(res.statusCode).toBe(200);
+    const [entry] = res.json();
+    expect(entry.leagueMemberId).toBe(member.id);
+  });
+});
+
 describe("GET /leagues/:leagueId/picks — membership check", () => {
   it("a league member can read the league's picks", async () => {
     const owner = await createTestUser();
@@ -116,6 +131,78 @@ describe("PUT /leagues/:leagueId/members/:memberId/picks/:gameId — ownership c
 
     expect(res.statusCode).toBe(403);
     expect(res.json().error.code).toBe("FORBIDDEN");
+  });
+});
+
+describe("PATCH /leagues/:leagueId/members/:memberId/notifications", () => {
+  it("a member can flip their own per-league notification preference", async () => {
+    const owner = await createTestUser();
+    const league = await createTestLeague(owner.id);
+    const member = await createTestLeagueMember(owner.id, league.id, { role: "commissioner" });
+
+    const token = await tokenFor(owner.id);
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/leagues/${league.id}/members/${member.id}/notifications`,
+      headers: auth(token),
+      payload: { enabled: false },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ notificationsEnabled: false });
+
+    const [row] = await db.select().from(leagueMember).where(eq(leagueMember.id, member.id)).limit(1);
+    expect(row?.notificationsEnabled).toBe(false);
+  });
+
+  it("user A cannot flip user B's per-league preference — real 403 over HTTP", async () => {
+    const owner = await createTestUser();
+    const league = await createTestLeague(owner.id);
+    const userA = await createTestUser();
+    const userB = await createTestUser();
+    await createTestLeagueMember(userA.id, league.id, { role: "member" });
+    const memberB = await createTestLeagueMember(userB.id, league.id, { role: "member" });
+
+    const tokenA = await tokenFor(userA.id);
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/leagues/${league.id}/members/${memberB.id}/notifications`,
+      headers: auth(tokenA),
+      payload: { enabled: false },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(res.json().error.code).toBe("FORBIDDEN");
+  });
+
+  it("rejects an unauthenticated request outright", async () => {
+    const owner = await createTestUser();
+    const league = await createTestLeague(owner.id);
+    const member = await createTestLeagueMember(owner.id, league.id, { role: "commissioner" });
+
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/leagues/${league.id}/members/${member.id}/notifications`,
+      payload: { enabled: false },
+    });
+
+    expect(res.statusCode).toBe(401);
+  });
+
+  it("rejects a missing enabled field", async () => {
+    const owner = await createTestUser();
+    const league = await createTestLeague(owner.id);
+    const member = await createTestLeagueMember(owner.id, league.id, { role: "commissioner" });
+
+    const token = await tokenFor(owner.id);
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/leagues/${league.id}/members/${member.id}/notifications`,
+      headers: auth(token),
+      payload: {},
+    });
+
+    expect(res.statusCode).toBe(400);
   });
 });
 
@@ -277,6 +364,40 @@ describe("PATCH /leagues/:leagueId — commissioner-only check", () => {
     expect(res.json().name).toBe("Renamed League");
   });
 
+  it("the commissioner can change the pick horizon", async () => {
+    const owner = await createTestUser();
+    const league = await createTestLeague(owner.id);
+    await createTestLeagueMember(owner.id, league.id, { role: "commissioner" });
+
+    const token = await tokenFor(owner.id);
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/leagues/${league.id}`,
+      headers: auth(token),
+      payload: { pickHorizonDays: 2 },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().pickHorizonDays).toBe(2);
+  });
+
+  it("rejects a pick horizon outside 1-30 days", async () => {
+    const owner = await createTestUser();
+    const league = await createTestLeague(owner.id);
+    await createTestLeagueMember(owner.id, league.id, { role: "commissioner" });
+
+    const token = await tokenFor(owner.id);
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/leagues/${league.id}`,
+      headers: auth(token),
+      payload: { pickHorizonDays: 31 },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.code).toBe("VALIDATION_ERROR");
+  });
+
   it("a non-commissioner member cannot rename the league — real 403 over HTTP", async () => {
     const owner = await createTestUser();
     const league = await createTestLeague(owner.id, { name: "Original Name" });
@@ -323,6 +444,42 @@ describe("POST /leagues — create", () => {
       .from(leagueMember)
       .where(and(eq(leagueMember.userId, creator.id), eq(leagueMember.leagueId, body.id)));
     expect(member!.role).toBe("commissioner");
+  });
+
+  it("defaults pickHorizonDays to 7 when omitted, and accepts an explicit override", async () => {
+    const creator = await createTestUser();
+    const token = await tokenFor(creator.id);
+
+    const defaultRes = await app.inject({
+      method: "POST",
+      url: "/leagues",
+      headers: auth(token),
+      payload: { name: "Default Horizon League", sports: ["nfl"], seasonStart: "2026-09-01" },
+    });
+    expect(defaultRes.json().pickHorizonDays).toBe(7);
+
+    const overrideRes = await app.inject({
+      method: "POST",
+      url: "/leagues",
+      headers: auth(token),
+      payload: { name: "Short Horizon League", sports: ["nfl"], seasonStart: "2026-09-01", pickHorizonDays: 2 },
+    });
+    expect(overrideRes.json().pickHorizonDays).toBe(2);
+  });
+
+  it("rejects a pick horizon outside 1-30 days", async () => {
+    const creator = await createTestUser();
+    const token = await tokenFor(creator.id);
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/leagues",
+      headers: auth(token),
+      payload: { name: "Bad Horizon League", sports: ["nfl"], seasonStart: "2026-09-01", pickHorizonDays: 0 },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.code).toBe("VALIDATION_ERROR");
   });
 
   it("rejects an unknown sport code", async () => {
@@ -416,6 +573,35 @@ describe("GET /leagues — multi-league home screen", () => {
     expect(entry.unpickedCount).toBe(1); // `upcoming` has no pick yet
     expect(entry.nextLockAt).not.toBeNull();
     void upcoming;
+  });
+
+  it("excludes an unpicked game beyond the league's pick horizon from unpickedCount/nextLockAt", async () => {
+    const alice = await createTestUser();
+    const testLeague = await createTestLeague(alice.id, { sports: ["nfl"], pickHorizonDays: 3 });
+    await createTestLeagueMember(alice.id, testLeague.id, { role: "commissioner" });
+
+    // Inside the 3-day horizon — should count.
+    await createTestGame({
+      sport: "nfl",
+      homeTeam: "Bills",
+      awayTeam: "Jets",
+      startsAt: new Date(Date.now() + 24 * 3600_000), // 1 day out
+    });
+    // Beyond the 3-day horizon — should NOT count, the exact "176
+    // unpicked games" bug this bound fixes.
+    await createTestGame({
+      sport: "nfl",
+      homeTeam: "Chiefs",
+      awayTeam: "Raiders",
+      startsAt: new Date(Date.now() + 10 * 24 * 3600_000), // 10 days out
+    });
+
+    const token = await tokenFor(alice.id);
+    const res = await app.inject({ method: "GET", url: "/leagues", headers: auth(token) });
+
+    expect(res.statusCode).toBe(200);
+    const [entry] = res.json();
+    expect(entry.unpickedCount).toBe(1);
   });
 
   it("orders leagues with open picks before leagues with none, soonest lock first", async () => {

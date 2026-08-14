@@ -1,0 +1,7 @@
+.screen {
+  padding-bottom: var(--space-6);
+}
+
+.dangerZone {
+  border: 1.5px solid rgba(192, 39, 27, 0.2);
+}

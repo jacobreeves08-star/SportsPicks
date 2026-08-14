@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
-import { and, eq, ne, or } from "drizzle-orm";
+import { and, eq, isNull, ne, or } from "drizzle-orm";
+import { DateTime } from "luxon";
 import { db } from "../db/client.js";
 import { game, league, leagueMember, pick, user } from "../db/schema.js";
 import { authenticate } from "../plugins/authenticate.js";
@@ -9,6 +10,7 @@ import { ApiError } from "../lib/http-errors.js";
 import { registerAccountRateLimit } from "../lib/rate-limit.js";
 import { hashPassword, verifyPassword } from "../lib/password.js";
 import { revokeAllSessionsForUser } from "../lib/session.js";
+import { computeStandings } from "../lib/standings.js";
 import { isValidIanaTimeZone, nowUtc } from "../lib/time.js";
 import { issueVerificationToken } from "../lib/verification-tokens.js";
 
@@ -27,6 +29,12 @@ const PUBLIC_PROFILE_COLUMNS = {
   deletionRequestedAt: user.deletionRequestedAt,
   scheduledDeletionAt: user.scheduledDeletionAt,
   createdAt: user.createdAt,
+  // Epic 10: the read-side complement to PATCH /me/notifications below
+  // — this is the caller's own resource (no privacy concern, unlike
+  // exposing it on the members LIST, which would leak one member's
+  // preference to every other member of a league — deliberately NOT
+  // done; see leagues.routes.ts's own notifications route comment).
+  notificationsEnabled: user.notificationsEnabled,
 };
 
 export async function usersRoutes(app: FastifyInstance): Promise<void> {
@@ -80,6 +88,32 @@ export async function usersRoutes(app: FastifyInstance): Promise<void> {
           warning: "Changing your timezone affects when picks lock for you going forward.",
         }),
       };
+    },
+  );
+
+  /**
+   * The global notifications off switch (JAC-43-48's `user.notifications_enabled`,
+   * read by pick-reminder.ts/results-summary.ts, but never exposed to
+   * a client until now — see docs/notifications.md). Checked first by
+   * both jobs and short-circuits regardless of any per-league setting
+   * — see leagues.routes.ts's `/:leagueId/members/:memberId/notifications`
+   * for that one.
+   */
+  app.patch(
+    "/me/notifications",
+    {
+      schema: {
+        body: {
+          type: "object",
+          required: ["enabled"],
+          properties: { enabled: { type: "boolean" } },
+        },
+      },
+    },
+    async (request) => {
+      const { enabled } = request.body as { enabled: boolean };
+      await db.update(user).set({ notificationsEnabled: enabled }).where(eq(user.id, request.user!.id));
+      return { notificationsEnabled: enabled };
     },
   );
 
@@ -185,6 +219,73 @@ export async function usersRoutes(app: FastifyInstance): Promise<void> {
       .where(eq(leagueMember.userId, userId));
 
     return { profile, memberships, picks };
+  });
+
+  /**
+   * "How did I do yesterday, across every league?" (JAC-49 — the
+   * results-digest pop-up shown once per day on app open). Deliberately
+   * calls the SAME `computeStandings()` results-summary.ts's own cron
+   * job already calls (not a second, parallel computation) — the two
+   * can never numerically disagree by construction. "Yesterday" is
+   * resolved PER LEAGUE in that league's own timezone, the identical
+   * two-step formula results-summary.ts uses (line ~97 there:
+   * `today` in the league's zone, then `.minus({ days: 1 })`), since
+   * two leagues in different timezones can genuinely disagree on what
+   * calendar date "yesterday" was at the same instant.
+   *
+   * A league is omitted entirely (not returned with zeros) when the
+   * caller had zero graded games yesterday in that league — no games
+   * scheduled, or nothing graded yet — since there's nothing worth
+   * showing for it.
+   */
+  app.get("/me/results-digest", async (request) => {
+    const userId = request.user!.id;
+
+    const memberships = await db
+      .select({
+        leagueMemberId: leagueMember.id,
+        leagueId: league.id,
+        leagueName: league.name,
+        timezone: league.timezone,
+      })
+      .from(leagueMember)
+      .innerJoin(league, eq(league.id, leagueMember.leagueId))
+      .where(and(eq(leagueMember.userId, userId), isNull(leagueMember.leftAt)));
+
+    const digestLeagues: Array<{
+      leagueId: string;
+      leagueName: string;
+      date: string;
+      wins: number;
+      losses: number;
+      gamesParticipated: number;
+      rank: number;
+    }> = [];
+
+    for (const membership of memberships) {
+      const today = DateTime.now().setZone(membership.timezone).toISODate();
+      if (!today) continue;
+      const yesterday = DateTime.fromISO(today, { zone: membership.timezone }).minus({ days: 1 }).toISODate();
+      if (!yesterday) continue;
+
+      const standings = await computeStandings(membership.leagueId, "today", yesterday);
+      const entry = standings.find((s) => s.leagueMemberId === membership.leagueMemberId);
+      if (!entry || entry.gamesParticipated === 0) continue;
+
+      digestLeagues.push({
+        leagueId: membership.leagueId,
+        leagueName: membership.leagueName,
+        date: yesterday,
+        wins: entry.wins,
+        losses: entry.losses,
+        gamesParticipated: entry.gamesParticipated,
+        rank: entry.rank,
+      });
+    }
+
+    digestLeagues.sort((a, b) => a.leagueName.localeCompare(b.leagueName));
+
+    return { leagues: digestLeagues };
   });
 
   app.post("/me/deletion-request", async (request) => {

@@ -1,18 +1,30 @@
 import { RouterProvider } from "@tanstack/react-router";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
+import { ErrorBoundary } from "./app-shell/ErrorBoundary.js";
+import "./design-system/tokens/tokens.css";
+import "./design-system/base.css";
+import { initErrorTracking } from "./observability/error-tracking.js";
 import { QueryProvider } from "./query/query-provider.js";
 import { createAppRouter } from "./routes/route-tree.js";
 import { startSessionExpiryRedirect } from "./routes/session-redirect.js";
 
 /**
- * Entry point for infrastructure verification only — Epics 9-11 build
- * the real screens (routes/route-tree.tsx's leaf routes have no
- * `component` yet). Every module this epic built is wired together
- * here: the query client (Step 5), the router and its deep links
- * (Step 8), and the session-expiry redirect connecting Step 2's
- * auth-store event to Step 8's router.
+ * The app's entry point. Epic 10 is the first epic to render real
+ * content here — auth-gated routing, the persistent shell (nav +
+ * banners), and now the placeholder screens routed inside it (Epic 11
+ * replaces those with the real pick-flow/standings/profile UI).
+ *
+ * `initErrorTracking()` runs FIRST, before anything else — same "as
+ * early as possible" placement as the server's own `initErrorTracking()`
+ * at the top of `server.ts` — so a crash during router/query-client
+ * construction itself would still have a chance of being reported.
+ * `ErrorBoundary` wraps the whole `RouterProvider`, not just the
+ * authenticated shell, so a crash on `/login` can't white-screen the
+ * app either.
  */
+initErrorTracking();
+
 const router = createAppRouter();
 startSessionExpiryRedirect(router);
 
@@ -23,8 +35,10 @@ if (!rootElement) {
 
 createRoot(rootElement).render(
   <StrictMode>
-    <QueryProvider>
-      <RouterProvider router={router} />
-    </QueryProvider>
+    <ErrorBoundary>
+      <QueryProvider>
+        <RouterProvider router={router} />
+      </QueryProvider>
+    </ErrorBoundary>
   </StrictMode>,
 );

@@ -6,9 +6,8 @@
 
 .bar {
   height: 14px;
-  border-radius: var(--radius-sm);
-  background-color: var(--color-border);
-  opacity: 0.5;
+  border-radius: var(--radius-full);
+  background-color: rgba(18, 19, 26, 0.14);
   animation: pulse 1.4s ease-in-out infinite;
 }
 

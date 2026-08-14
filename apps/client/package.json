@@ -14,6 +14,7 @@
     "build-storybook": "storybook build"
   },
   "dependencies": {
+    "@sentry/browser": "^10.70.0",
     "@tanstack/react-query": "^5.59.0",
     "@tanstack/react-router": "^1.79.0",
     "react": "^18.3.1",

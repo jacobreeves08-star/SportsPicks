@@ -60,21 +60,32 @@ export const user = pgTable(
   ],
 );
 
-export const league = pgTable("league", {
-  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
-  name: text("name").notNull(),
-  // Sport codes this league covers, e.g. {'nfl','nba'}. A game belongs to
-  // this league's slate iff game.sport is in this array (see game table
-  // comment) — there is no separate per-league game join table.
-  sports: text("sports").array().notNull(),
-  commissionerId: uuid("commissioner_id")
-    .notNull()
-    .references(() => user.id),
-  timezone: text("timezone").notNull(),
-  seasonStart: date("season_start").notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const league = pgTable(
+  "league",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    name: text("name").notNull(),
+    // Sport codes this league covers, e.g. {'nfl','nba'}. A game belongs to
+    // this league's slate iff game.sport is in this array (see game table
+    // comment) — there is no separate per-league game join table.
+    sports: text("sports").array().notNull(),
+    commissionerId: uuid("commissioner_id")
+      .notNull()
+      .references(() => user.id),
+    timezone: text("timezone").notNull(),
+    seasonStart: date("season_start").notNull(),
+    // How many days ahead a member can see a game as pickable — bounds
+    // both the home screen's `unpickedCount` (leagues.routes.ts) and the
+    // actual pick-write enforcement (lib/pick-write.ts), commissioner-
+    // configurable via PATCH /:leagueId. Default of 7 (a week); the
+    // check below caps it at 30 so a league can't accidentally recreate
+    // the old unbounded behavior.
+    pickHorizonDays: integer("pick_horizon_days").notNull().default(7),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [check("league_pick_horizon_days_check", sql`${t.pickHorizonDays} between 1 and 30`)],
+);
 
 export const leagueMember = pgTable(
   "league_member",

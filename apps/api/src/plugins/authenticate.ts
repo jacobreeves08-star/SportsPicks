@@ -29,3 +29,25 @@ export async function authenticate(request: FastifyRequest, _reply: FastifyReply
 
   request.user = { id: authed.userId, sessionId: authed.sessionId };
 }
+
+/**
+ * `authenticate`'s never-reject counterpart — populates `request.user`
+ * when a valid Bearer token is present, otherwise leaves it unset and
+ * lets the request through regardless. Exists for exactly one route
+ * (`GET /leagues/preview`, league-invites.routes.ts): a real invite
+ * link must show its preview to a visitor who has no account yet at
+ * all (Epic 11 brief — "preview -> signup -> auto-join"), while an
+ * ALREADY-logged-in caller hitting the same route should still get an
+ * accurate `alreadyMember`. Every OTHER route in this app should keep
+ * using `authenticate` — this is deliberately not the default.
+ */
+export async function optionalAuthenticate(request: FastifyRequest, _reply: FastifyReply): Promise<void> {
+  const header = request.headers.authorization;
+  const token = header?.startsWith("Bearer ") ? header.slice("Bearer ".length) : undefined;
+  if (!token) return;
+
+  const authed = await authenticateAccessToken(token);
+  if (authed) {
+    request.user = { id: authed.userId, sessionId: authed.sessionId };
+  }
+}

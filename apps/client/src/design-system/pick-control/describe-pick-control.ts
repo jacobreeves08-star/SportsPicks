@@ -21,6 +21,10 @@ export function describePickControl(state: PickControlState, teams: PickControlT
         ? `${matchup}. No pick yet. Locks ${lockTime}.`
         : `${matchup}. You picked ${describeSide(state.selected)}. Still open — locks ${lockTime}.`;
     }
+    case "not-yet-open": {
+      const opensDate = formatOpensDate(state.opensAt);
+      return `${matchup}. Picks open ${opensDate}.`;
+    }
     case "locked": {
       return state.selected === null
         ? `${matchup}. Locked. You did not make a pick.`
@@ -61,4 +65,14 @@ function formatLockTime(iso: string): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return "soon";
   return new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(date);
+}
+
+/** Mirrors `NotYetOpenBadge`'s own private formatter exactly (not
+ * imported from there — `indicators/` is a lower-level module that
+ * `pick-control/` already depends on, so the reverse import would be
+ * circular). Keep the two in sync if this format ever changes. */
+function formatOpensDate(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "soon";
+  return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(date);
 }

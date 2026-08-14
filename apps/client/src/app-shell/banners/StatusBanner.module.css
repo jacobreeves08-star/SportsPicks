@@ -1,0 +1,22 @@
+.banner {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+}
+
+.tone-warning {
+  background-color: rgba(192, 39, 27, 0.08);
+}
+
+.tone-info {
+  background-color: rgba(18, 19, 26, 0.05);
+}
+
+.icon-warning {
+  color: var(--color-error);
+  flex-shrink: 0;
+}
+
+.icon-info {
+  color: var(--color-text-dim);
+  flex-shrink: 0;
+}

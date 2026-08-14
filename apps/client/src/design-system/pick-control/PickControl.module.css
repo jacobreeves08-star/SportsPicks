@@ -12,13 +12,20 @@
 }
 
 /* One-thumb tap target (a11y doc: ~44x44pt minimum, with spacing
-   between sides so a mis-tap doesn't select the wrong team). */
+   between sides so a mis-tap doesn't select the wrong team). A filled,
+   confident selected state (background flip, not just a border) reads
+   faster at a glance across a ten-game slate than a border-only
+   treatment — the whole point of the split control. */
 .side {
   appearance: none;
   box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
   min-height: 56px;
   padding: var(--space-3) var(--space-2);
-  border: 2px solid var(--color-border);
+  border: 1.5px solid rgba(18, 19, 26, 0.1);
   border-radius: var(--radius-md);
   background-color: var(--color-surface-raised);
   color: var(--color-text);
@@ -26,6 +33,19 @@
   font-weight: 600;
   cursor: pointer;
   text-align: center;
+  transition:
+    background-color var(--motion-duration-fast) var(--motion-ease),
+    border-color var(--motion-duration-fast) var(--motion-ease),
+    color var(--motion-duration-fast) var(--motion-ease),
+    transform var(--motion-duration-fast) var(--motion-ease);
+}
+
+.side:hover:not(.sideInert) {
+  border-color: var(--color-pick-mine);
+}
+
+.side:active:not(.sideInert) {
+  transform: scale(0.98);
 }
 
 .side:focus-visible {
@@ -33,13 +53,28 @@
   outline-offset: 2px;
 }
 
-/* pick-mine: border weight/color change, not color alone — the
-   selected side also carries a bold label weight already applied
-   above, giving a second, non-color signal. */
+.sideLabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* pick-mine: a full color-fill change, not a hairline alone — the
+   selected side ALSO grows a check icon (PickControl.tsx renders
+   CheckIcon whenever isSelected), a second, non-color signal that
+   survives a colorblind render or a greyscale screenshot. */
 .sideSelected {
   border-color: var(--color-pick-mine);
-  border-width: 3px;
-  color: var(--color-pick-mine);
+  background-color: var(--color-pick-mine);
+  color: #ffffff;
+}
+
+.sideSelected:hover:not(.sideInert) {
+  border-color: var(--color-pick-mine);
+}
+
+.sideCheck {
+  flex-shrink: 0;
 }
 
 /* Locked/final/void sides stay FOCUSABLE (aria-disabled, never the
@@ -47,23 +82,32 @@
    visually inert and don't respond to pointer activation. */
 .sideInert {
   cursor: default;
-  opacity: 0.75;
+  opacity: 0.6;
+}
+
+.sideInert.sideSelected {
+  opacity: 0.85;
 }
 
 .sideWinner {
   border-color: var(--color-result-hit);
+  background-color: var(--color-result-hit);
+  color: #ffffff;
+  opacity: 1;
 }
 
 .statusRow {
   display: flex;
   align-items: center;
   gap: var(--space-2);
+  padding: 0 var(--space-1);
 }
 
 .rejectionMessage {
   border: 1px solid var(--color-error);
   border-radius: var(--radius-md);
   padding: var(--space-2) var(--space-3);
+  background-color: rgba(192, 39, 27, 0.06);
 }
 
 .queuedMarker {

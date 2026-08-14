@@ -1,0 +1,58 @@
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.row {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+}
+
+.row:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--radius-md);
+}
+
+.rowSurface {
+  cursor: pointer;
+  transition: transform var(--motion-duration-fast) var(--motion-ease), box-shadow var(--motion-duration-fast) var(--motion-ease);
+}
+
+.rowSurface:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--elevation-2);
+}
+
+.unpickedPill {
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-full);
+  background-color: rgba(15, 118, 110, 0.1);
+}
+
+.headerLink,
+.actionLink {
+  display: inline-flex;
+  align-items: center;
+  color: var(--color-pick-mine);
+  background-color: var(--color-pick-mine-wash);
+  border-radius: var(--radius-full);
+  padding: var(--space-2) var(--space-3);
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background-color var(--motion-duration-fast) var(--motion-ease);
+}
+
+.headerLink:hover,
+.actionLink:hover {
+  background-color: var(--color-pick-mine-wash-strong);
+}
+
+.headerLink:focus-visible,
+.actionLink:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}

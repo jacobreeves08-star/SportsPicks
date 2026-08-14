@@ -174,17 +174,23 @@ describe("GET /leagues/preview", () => {
   });
 
   /**
-   * JAC-43-48 regression: this endpoint's per-user 10/min limit used to
-   * be a SILENT no-op — derived via a second `app.rateLimit()` call off
-   * the same registration as the route-level `config.rateLimit` per-IP
-   * check, both sharing one single-fire-per-request guard, so only the
-   * first (per-IP) ever actually ran. Now a genuinely independent
-   * registration (lib/rate-limit.ts) — this asserts it actually rejects
-   * the 11th request from ONE user, and that a different user is
-   * unaffected (proving it's keyed by account, not by the shared IP
-   * every app.inject() call uses).
+   * JAC-43-48 regression: this endpoint's rate limit used to be a
+   * SILENT no-op — derived via a second `app.rateLimit()` call off the
+   * same registration as the route-level `config.rateLimit` check,
+   * both sharing one single-fire-per-request guard, so only the first
+   * ever actually ran. Now a genuinely independent registration
+   * (lib/rate-limit.ts) — this asserts it actually rejects the 11th
+   * request in the window.
+   *
+   * Keyed by IP, not by account (Epic 11 — see league-invites.routes.ts's
+   * own top comment): `/preview` must work for a visitor with no
+   * account at all, so there's no user id to key on pre-auth. This is
+   * a deliberate change from this endpoint's original per-user
+   * keying — a different user from the SAME ip (what `app.inject()`
+   * simulates for every call in this file) is correctly caught by the
+   * same limit here, unlike the old per-user version.
    */
-  it("limits one user to 10 requests/minute, independently of a different user", async () => {
+  it("limits 10 requests/minute per IP, regardless of which account is calling", async () => {
     const owner = await createTestUser();
     const testLeague = await createTestLeague(owner.id);
     await createTestLeagueMember(owner.id, testLeague.id, { role: "commissioner" });
@@ -204,6 +210,8 @@ describe("GET /leagues/preview", () => {
     expect((lastBody as { error: { code: string; retryAfterSeconds: number } }).error.code).toBe("RATE_LIMITED");
     expect((lastBody as { error: { retryAfterSeconds: number } }).error.retryAfterSeconds).toBeGreaterThan(0);
 
+    // A different account, same (simulated) IP — still limited, since
+    // the key is the IP, not the account.
     const other = await createTestUser();
     const otherToken = await tokenFor(other.id);
     const otherRes = await app.inject({
@@ -211,11 +219,42 @@ describe("GET /leagues/preview", () => {
       url: `/leagues/preview?code=${code.code}`,
       headers: auth(otherToken),
     });
-    expect(otherRes.statusCode).toBe(200);
+    expect(otherRes.statusCode).toBe(429);
+  });
+
+  it("works with no Authorization header at all — a visitor with no account yet", async () => {
+    const owner = await createTestUser();
+    const testLeague = await createTestLeague(owner.id, { name: "Public Preview League" });
+    await createTestLeagueMember(owner.id, testLeague.id, { role: "commissioner" });
+    const code = await createTestInviteCode(testLeague.id);
+
+    const res = await app.inject({ method: "GET", url: `/leagues/preview?code=${code.code}` });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.name).toBe("Public Preview League");
+    expect(body.alreadyMember).toBe(false);
   });
 });
 
 describe("POST /leagues/join", () => {
+  /**
+   * Regression for the Epic 11 auth-split fix: `/preview` became
+   * public, but `/join` genuinely can't — it attaches a membership row
+   * to a real userId, so there's nothing to attach it to without one.
+   */
+  it("still requires authentication — the /preview fix does not leak to /join", async () => {
+    const owner = await createTestUser();
+    const testLeague = await createTestLeague(owner.id);
+    await createTestLeagueMember(owner.id, testLeague.id, { role: "commissioner" });
+    const code = await createTestInviteCode(testLeague.id);
+
+    const res = await app.inject({ method: "POST", url: "/leagues/join", payload: { code: code.code } });
+
+    expect(res.statusCode).toBe(401);
+    expect(res.json().error.code).toBe("UNAUTHENTICATED");
+  });
+
   it("joins the league and increments uses_count", async () => {
     const owner = await createTestUser();
     const testLeague = await createTestLeague(owner.id, { name: "Join Me" });

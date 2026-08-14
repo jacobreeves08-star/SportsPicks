@@ -1,5 +1,14 @@
 .badge {
   display: inline-flex;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-full);
+}
+
+.badge-hit {
+  background-color: rgba(21, 128, 61, 0.1);
+}
+.badge-miss {
+  background-color: rgba(192, 39, 27, 0.08);
 }
 
 .icon-hit {

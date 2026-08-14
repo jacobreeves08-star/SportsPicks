@@ -1,5 +1,8 @@
 .badge {
   display: inline-flex;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-full);
+  background-color: rgba(138, 90, 0, 0.1);
 }
 
 .icon {

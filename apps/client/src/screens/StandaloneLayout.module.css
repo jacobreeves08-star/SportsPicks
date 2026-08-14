@@ -1,0 +1,14 @@
+.page {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+  background: radial-gradient(circle at 15% -10%, rgba(67, 56, 202, 0.1), transparent 55%), var(--color-surface);
+}
+
+.card {
+  width: 100%;
+  max-width: 420px;
+}

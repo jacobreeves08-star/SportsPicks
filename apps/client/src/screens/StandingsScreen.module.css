@@ -1,0 +1,89 @@
+.screen {
+  padding-bottom: var(--space-6);
+}
+
+.tabBar {
+  display: inline-flex;
+  padding: 4px;
+  border-radius: var(--radius-full);
+  background-color: rgba(18, 19, 26, 0.06);
+  width: 100%;
+}
+
+.tab,
+.tabActive {
+  flex: 1;
+  text-align: center;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-full);
+  text-decoration: none;
+  color: var(--color-text-dim);
+  font-size: 14px;
+  font-weight: 600;
+  transition: background-color var(--motion-duration-fast) var(--motion-ease), color var(--motion-duration-fast) var(--motion-ease), box-shadow var(--motion-duration-fast) var(--motion-ease);
+}
+
+.tabActive {
+  color: var(--color-pick-mine);
+  background-color: var(--color-surface-raised);
+  box-shadow: var(--elevation-1);
+}
+
+.tab:focus-visible,
+.tabActive:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.row {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+}
+
+.row:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--radius-md);
+}
+
+.rowSurface {
+  cursor: pointer;
+  transition: transform var(--motion-duration-fast) var(--motion-ease), box-shadow var(--motion-duration-fast) var(--motion-ease);
+}
+
+.rowSurface:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--elevation-2);
+}
+
+.rankBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 6px;
+  border-radius: var(--radius-full);
+  background-color: rgba(18, 19, 26, 0.06);
+}
+
+/* "Anchored, and pinned when the list scrolls" (Epic 11 brief) — the
+   current user's row sticks to the top of the scrolling viewport once
+   the page scrolls past its natural position. No other row in this
+   list is sticky, so there's no competing stack to coordinate. */
+.meRow {
+  position: sticky;
+  top: calc(64px + var(--space-2));
+  z-index: 1;
+}
+
+.meRow .rowSurface {
+  border: 1.5px solid var(--color-pick-mine);
+}

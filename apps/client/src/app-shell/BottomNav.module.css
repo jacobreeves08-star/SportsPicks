@@ -1,0 +1,78 @@
+.nav {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: var(--color-surface-raised);
+  box-shadow: 0 -1px 0 rgba(18, 19, 26, 0.06), 0 -8px 24px rgba(18, 19, 26, 0.08);
+  /* Safe-area inset so the nav (and its tap targets) clear a phone's
+     home-indicator/rounded-corner area rather than sitting under it. */
+  padding-bottom: env(safe-area-inset-bottom, 0);
+  z-index: 1;
+}
+
+.row {
+  padding: var(--space-2) var(--space-3);
+  gap: var(--space-1);
+}
+
+.item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  /* One-handed, one-thumb tap target — same 44px+ discipline as
+     PickControl's sides (design-system/pick-control). */
+  min-height: 52px;
+  padding: var(--space-1);
+  text-decoration: none;
+  border-radius: var(--radius-md);
+  color: var(--color-text-dim);
+  transition: color var(--motion-duration-fast) var(--motion-ease), background-color var(--motion-duration-fast) var(--motion-ease);
+}
+
+.item:hover {
+  background-color: rgba(18, 19, 26, 0.04);
+}
+
+.item:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+.icon {
+  transition: transform var(--motion-duration-fast) var(--motion-ease);
+}
+
+.itemActive {
+  color: var(--color-pick-mine);
+  background-color: var(--color-pick-mine-wash);
+}
+
+/* Text's own `color="default"` prop sets an explicit color class on
+   its rendered <span>, which otherwise wins over the inherited color
+   above (equal specificity, but the more specific element+class
+   selector here still beats it) — this is what actually makes the
+   label itself, not just the icon, pick up the active accent color. */
+.itemActive span {
+  color: inherit;
+}
+
+.itemActive .icon {
+  transform: translateY(-1px);
+}
+
+.itemDisabled {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-height: 52px;
+  padding: var(--space-1);
+  color: var(--color-text-dim);
+  opacity: 0.5;
+}

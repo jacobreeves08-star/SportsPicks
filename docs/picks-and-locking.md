@@ -6,9 +6,11 @@ Scoring is straight-up: one point per correct winner, no spreads. This is the au
 
 "Reject any pick written at or after its game's scheduled start" is enforced in exactly one place: `writePick()`'s atomic SQL statement, never anywhere else, and never by trusting anything the client sends. The client's clock is never consulted — a manipulated device clock, a page left open since morning, and a hand-crafted `curl` request are all rejected identically, because none of them can influence what the statement itself reads for `starts_at`.
 
+A second, symmetric bound lives in the same statement: `PICK_BEYOND_HORIZON` (→ `409 PICK_NOT_YET_OPEN`) rejects a pick on a game further out than the league's own `pick_horizon_days` (see `docs/leagues-and-membership.md`). Same "one enforcement point" rule applies — this is not a separate check bolted on elsewhere. Unlike the lock bound, the horizon bound can never newly fail between phase 1 and phase 2 below: it only gets *more* permissive as real time advances (the rolling `now() + pick_horizon_days` window moves forward), so if phase 1's fast-path already passed it, phase 2 will too.
+
 `writePick()` is two-phase, deliberately:
 
-- **Phase 1** pre-validates everything *except* the lock, in application code, against one already-fetched `game` row: the sport is part of the league, the game isn't `canceled` or `postponed` (a postponed game's `starts_at` doesn't reliably mean anything until schedule-ingest finds a real new time — locking it out entirely, not just leaving it to the time check, avoids accepting a pick against a stale value), and `selectedTeam` is one of the two actual teams (or `'DRAW'` when the game allows it). This phase's own `now() >= startsAt` check is a fast-path courtesy only — it saves a round trip for an obviously-locked game, but it is **not** the enforcement, and a game that locks in the tiny window after this check still gets caught by phase 2.
+- **Phase 1** pre-validates everything *except* the lock and horizon, in application code, against one already-fetched `game` row: the sport is part of the league, the game isn't `canceled` or `postponed` (a postponed game's `starts_at` doesn't reliably mean anything until schedule-ingest finds a real new time — locking it out entirely, not just leaving it to the time check, avoids accepting a pick against a stale value), and `selectedTeam` is one of the two actual teams (or `'DRAW'` when the game allows it). This phase's own `now() >= startsAt` and `startsAt >= now() + pickHorizonDays` checks are a fast-path courtesy only — they save a round trip for an obviously-locked or obviously-too-far-out game, but neither is the enforcement, and a game that locks in the tiny window after this check still gets caught by phase 2.
 - **Phase 2** is the one real enforcement point: a single atomic statement that re-reads `starts_at` fresh as part of the very same statement — never from phase 1's read, never from an earlier request — so a game whose start time changes between requests locks at the *new* time by construction, not because anything remembered to re-check:
 
 ```sql
@@ -17,7 +19,10 @@ with upserted as (
   select $1, $2, $3
   where exists (
     select 1 from game
-    where id = $2 and starts_at > now() and status not in ('canceled', 'postponed')
+    where id = $2
+      and starts_at > now()
+      and starts_at < now() + ($4 * interval '1 day')  -- $4 = the league's pick_horizon_days
+      and status not in ('canceled', 'postponed')
   )
   on conflict (league_member_id, game_id) do update set selected_team = excluded.selected_team
   returning id, league_member_id, game_id, selected_team, created_at, (xmax = 0) as was_insert

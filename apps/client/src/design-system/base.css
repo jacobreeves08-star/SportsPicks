@@ -1,0 +1,86 @@
+/**
+ * The global reset + base element styles — genuinely missing before
+ * this redesign pass (the app had no box-sizing reset, no body
+ * background/font, and browser default margins on every heading and
+ * paragraph). `tokens.css` stays values-only (its own doc comment,
+ * and contrast.test.ts/token-names.test.ts both parse it as a pure
+ * `--name: value` list); this file is where those values actually get
+ * applied to bare HTML elements, imported once from main.tsx right
+ * after tokens.css.
+ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  height: 100%;
+  /* A user's explicit OS-level zoom/font-size preference still scales
+     everything (every size in this system is px, not rem, but this
+     keeps the baseline correct if that ever changes). */
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  height: 100%;
+  margin: 0;
+  background-color: var(--color-surface);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  /* No visible flash on tap on touch devices — every interactive
+     element already has its own :focus-visible ring and, where
+     relevant, a real pressed state; the OS default gray tap flash
+     just looks dated on top of that. */
+  -webkit-tap-highlight-color: transparent;
+}
+
+#root {
+  height: 100%;
+}
+
+h1,
+h2,
+h3,
+h4,
+p,
+figure,
+blockquote,
+dl,
+dd {
+  margin: 0;
+}
+
+ul,
+ol {
+  margin: 0;
+  padding: 0;
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+  color: inherit;
+}
+
+img,
+svg {
+  display: block;
+  max-width: 100%;
+}
+
+a {
+  color: inherit;
+}
+
+::selection {
+  background-color: var(--color-pick-mine);
+  color: #ffffff;
+}

@@ -36,3 +36,14 @@ afterEach(() => {
  * this repo has already applied to every other library choice.
  */
 expect.extend(toHaveNoViolations);
+
+/**
+ * jsdom doesn't implement `window.scrollTo` at all — TanStack
+ * Router's scroll-restoration feature calls it on every navigation
+ * (Epic 10, once real `RouterProvider`-based tests started rendering
+ * the full route tree), which floods test output with "Not
+ * implemented" errors that don't fail anything but bury real
+ * signal. A no-op stub is the honest fix: this repo has no scroll
+ * position to restore in a jsdom test environment anyway.
+ */
+window.scrollTo = () => {};

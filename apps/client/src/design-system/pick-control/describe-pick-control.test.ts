@@ -20,6 +20,11 @@ describe("describePickControl", () => {
     expect(text).toMatch(/^Bills vs Jets\. You picked Bills\. Still open — locks /);
   });
 
+  it("not-yet-open — beyond the league's pick horizon", () => {
+    const text = describePickControl({ status: "not-yet-open", selected: null, opensAt: "2026-08-20T00:00:00.000Z" }, teams);
+    expect(text).toMatch(/^Bills vs Jets\. Picks open /);
+  });
+
   it("locked with a pick (pickState: locked, myPick set)", () => {
     const text = describePickControl({ status: "locked", selected: "Jets" }, teams);
     expect(text).toBe("Bills vs Jets. Locked. You picked Jets.");
