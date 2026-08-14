@@ -1,8 +1,10 @@
 import { type FormEvent, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { Link, useSearch } from "@tanstack/react-router";
-import { signup } from "../../api/endpoints.js";
+import { Link, useRouter, useSearch } from "@tanstack/react-router";
+import { setAuthTokens } from "../../api/auth-store.js";
+import { login, signup } from "../../api/endpoints.js";
 import { Stack, Text } from "../../design-system/index.js";
+import { navigateAfterLogin } from "../../routes/post-login-redirect.js";
 import { getDetectedTimezone } from "../../timezone/timezones.js";
 import { StandaloneLayout } from "../StandaloneLayout.js";
 import { FormField } from "../FormField.js";
@@ -12,14 +14,32 @@ import authFormStyles from "../StandaloneForm.module.css";
 
 export function SignupScreen() {
   const { returnTo } = useSearch({ from: "/signup" });
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [timezone, setTimezone] = useState(() => getDetectedTimezone());
   const [clientErrors, setClientErrors] = useState<Record<string, string>>({});
 
-  const mutation = useMutation({
+  // No verification step to wait on — logging straight in with the same
+  // credentials just submitted is exactly what a user would do by hand
+  // next, and it leaves auth.routes.ts's /signup response (deliberately
+  // identical whether the email was new or already registered, to avoid
+  // account enumeration) completely untouched: this success path never
+  // inspects it, it just tries the real login endpoint. If that fails —
+  // e.g. the email really did belong to someone else's account — the
+  // fallback screen below still reads correctly either way.
+  const loginMutation = useMutation({
+    mutationFn: () => login({ email, password }),
+    onSuccess: (tokens) => {
+      setAuthTokens(tokens);
+      void navigateAfterLogin(router, returnTo);
+    },
+  });
+
+  const signupMutation = useMutation({
     mutationFn: () => signup({ email, password, displayName, timezone }),
+    onSuccess: () => loginMutation.mutate(),
   });
 
   function handleSubmit(event: FormEvent) {
@@ -29,14 +49,14 @@ export function SignupScreen() {
     if (password.length < 8) errors.password = "Must be at least 8 characters.";
     setClientErrors(errors);
     if (Object.keys(errors).length > 0) return;
-    mutation.mutate();
+    signupMutation.mutate();
   }
 
-  if (mutation.isSuccess) {
+  if (signupMutation.isSuccess && loginMutation.isError) {
     return (
       <StandaloneLayout title="Check your email">
         <Stack gap={3}>
-          <Text as="p">{mutation.data.message}</Text>
+          <Text as="p">{signupMutation.data.message}</Text>
           <Link to="/login" search={{ returnTo }} className={authFormStyles.link}>
             Back to login
           </Link>
@@ -45,7 +65,8 @@ export function SignupScreen() {
     );
   }
 
-  const serverError = mutation.isError ? presentApiError(mutation.error) : undefined;
+  const isPending = signupMutation.isPending || loginMutation.isPending;
+  const serverError = signupMutation.isError ? presentApiError(signupMutation.error) : undefined;
   const fieldErrors = { ...clientErrors, ...serverError?.fieldErrors };
 
   return (
@@ -96,10 +117,10 @@ export function SignupScreen() {
           />
           <button
             type="submit"
-            disabled={mutation.isPending}
+            disabled={isPending}
             className={`${authFormStyles.button} ${authFormStyles.buttonPrimary}`}
           >
-            {mutation.isPending ? "Signing up…" : "Sign up"}
+            {isPending ? "Signing up…" : "Sign up"}
           </button>
           <Text as="p" size="sm">
             Already have an account?{" "}
