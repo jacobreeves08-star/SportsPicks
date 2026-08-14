@@ -16,6 +16,16 @@ The `outcome IS NULL` guard is what makes "grading twice cannot double-count" tr
 
 `regradeGame(gameId, winningTeam, executor)` is the one function **without** that guard — it re-grades every `win`/`loss` pick on a game (not just ungraded ones), used only by the result-correction flow below. It never touches an already-`void`ed pick: void is terminal for a given pick (the game was postponed/cancelled when it happened), and a result correction has no bearing on that.
 
+### Golf grades on the opposite rule, deliberately (JAC-56)
+
+`lib/golf-grading.ts`'s `gradeGolfPicks(tournamentId, executor)` has **no** `outcome IS NULL` guard — it behaves like `regradeGame` (always overwrite), not `gradeFinalGame` (grade once). That inversion is the whole point: golf grading is **live**, re-run on every leaderboard poll while the tournament is under way, so a member's outcome legitimately flips from `loss` to `win` (or back) as the leaderboard moves. There is no single "first grading event" to guard against re-running.
+
+A golf pick is a win iff at least one of that member's selected golfers currently sits at `tournament_entry.position <= league.golf_top_n`, read per-league via the `league_member → league` join (the same tournament can be picked across leagues with different settings). A null `position` never counts. `voidTournamentPicks` is the postponed/cancelled equivalent of `voidGamePicks`, and `'void'` stays terminal here too — `gradeGolfPicks` never touches a voided pick.
+
+Golf records merge into the **same** `wins`/`losses`/`gamesParticipated` totals as game picks — `computeStandings` sums `fetchRecords` and `fetchGolfRecords` per member before ranking, so a golf league and a football league produce one unified record, not two parallel ones. The golf query joins **`tournament.ends_at`**, not `starts_at`: standings credit for a multi-day tournament posts entirely on the day it concludes, matching how a game's result posts on the game's own day.
+
+`fetchGolfClusterPicks` feeds the same tiebreaker chain, reusing `ClusterPick.gameId` as an opaque key holding the tournament id. That's safe because every read site uses it only for Set-based "commonly picked" intersection — and usefully means a shared tournament breaks a tie exactly the way a shared game does, with no extra logic.
+
 ### The `check_pick_selected_team` trigger bug this surfaced
 
 Grading's `UPDATE pick SET outcome = ...` writes touch every `pick` row on a game — and the pre-existing trigger (`0001_init.sql`) was `BEFORE INSERT OR UPDATE ON pick` with no column qualifier, so it re-validated `selected_team` against `game.home_team`/`away_team` on **every** update, including one that never touches `selected_team` at all. Epic 3 deliberately allows a team's display name to self-correct on re-ingest (`home_team_external_id` is the stable join key); if that correction landed on a game *after* a pick was already made against the old name, grading that pick would crash outright — real, not hypothetical, given the design already in place.

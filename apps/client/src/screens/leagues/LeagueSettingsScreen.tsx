@@ -10,6 +10,7 @@ import { queryKeys } from "../../query/keys.js";
 import { FormField } from "../FormField.js";
 import { presentApiError } from "../present-api-error.js";
 import formStyles from "../StandaloneForm.module.css";
+import { GolfSettingsFields } from "./GolfSettingsFields.js";
 import styles from "./LeagueSettingsScreen.module.css";
 import { PickHorizonSelect } from "./PickHorizonSelect.js";
 
@@ -31,6 +32,8 @@ export function LeagueSettingsScreen() {
   const [name, setName] = useState("");
   const [sports, setSports] = useState<string[]>([]);
   const [pickHorizonDays, setPickHorizonDays] = useState(7);
+  const [golfPickCount, setGolfPickCount] = useState(3);
+  const [golfTopN, setGolfTopN] = useState(10);
   const [clientErrors, setClientErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
@@ -38,10 +41,20 @@ export function LeagueSettingsScreen() {
     setName(league.name);
     setSports(league.sports);
     setPickHorizonDays(league.pickHorizonDays);
+    setGolfPickCount(league.golfPickCount);
+    setGolfTopN(league.golfTopN);
   }, [league]);
 
   const mutation = useMutation({
-    mutationFn: () => updateLeague(leagueId, { name, sports, pickHorizonDays }),
+    mutationFn: () =>
+      updateLeague(leagueId, {
+        name,
+        sports,
+        pickHorizonDays,
+        // Only sent for a league that covers golf — see the same
+        // reasoning in CreateLeagueScreen.
+        ...(sports.includes("golf") && { golfPickCount, golfTopN }),
+      }),
     onSuccess: (updated) => {
       queryClient.setQueryData(queryKeys.league(leagueId), updated);
       void queryClient.invalidateQueries({ queryKey: queryKeys.myLeagues() });
@@ -134,6 +147,19 @@ export function LeagueSettingsScreen() {
               hint="How far ahead members can pick a game."
               error={fieldErrors.pickHorizonDays}
             />
+
+            {/* Only shown for a league that actually covers golf — these
+                two settings are meaningless otherwise, and hiding them
+                keeps the form honest about what applies to this league. */}
+            {sports.includes("golf") ? (
+              <GolfSettingsFields
+                golfPickCount={golfPickCount}
+                golfTopN={golfTopN}
+                onPickCountChange={setGolfPickCount}
+                onTopNChange={setGolfTopN}
+                errors={fieldErrors}
+              />
+            ) : null}
 
             <button
               type="submit"

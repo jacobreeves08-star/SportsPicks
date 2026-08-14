@@ -10,6 +10,7 @@ import { PasswordResetRequestScreen } from "../screens/auth/PasswordResetRequest
 import { SignupScreen } from "../screens/auth/SignupScreen.js";
 import { VerifyEmailChangeScreen } from "../screens/auth/VerifyEmailChangeScreen.js";
 import { VerifyEmailScreen } from "../screens/auth/VerifyEmailScreen.js";
+import { GolfScreen } from "../screens/GolfScreen.js";
 import { HeadToHeadScreen } from "../screens/HeadToHeadScreen.js";
 import { HomeScreen } from "../screens/HomeScreen.js";
 import { CreateLeagueScreen } from "../screens/leagues/CreateLeagueScreen.js";
@@ -317,6 +318,16 @@ const leagueSettingsRoute = createRoute({
   component: LeagueSettingsScreen,
 });
 
+/** `/leagues/:leagueId/golf` — no date segment, unlike `slateRoute`:
+ * golf has at most one relevant tournament in flight at a time and the
+ * server resolves which one, so there's nothing for a client to put in
+ * the URL. See docs/sports-pipeline.md. */
+const golfRoute = createRoute({
+  getParentRoute: () => leagueLayoutRoute,
+  path: "golf",
+  component: GolfScreen,
+});
+
 const routeTree = rootRoute.addChildren([
   loginRoute,
   signupRoute,
@@ -330,7 +341,14 @@ const routeTree = rootRoute.addChildren([
     homeRoute,
     profileRoute,
     createLeagueRoute,
-    leagueLayoutRoute.addChildren([slateIndexRoute, slateRoute, standingsRoute, headToHeadRoute, leagueSettingsRoute]),
+    leagueLayoutRoute.addChildren([
+      slateIndexRoute,
+      slateRoute,
+      standingsRoute,
+      headToHeadRoute,
+      leagueSettingsRoute,
+      golfRoute,
+    ]),
   ]),
 ]);
 

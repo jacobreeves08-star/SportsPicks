@@ -81,3 +81,9 @@ export function headToHeadPath(leagueId: string, date: string): string {
 export function leagueSettingsPath(leagueId: string): string {
   return `/leagues/${encodeURIComponent(leagueId)}/settings`;
 }
+
+/** No date segment, unlike `slatePath` — golf has at most one relevant
+ * tournament in flight at a time, resolved server-side. */
+export function golfPath(leagueId: string): string {
+  return `/leagues/${encodeURIComponent(leagueId)}/golf`;
+}

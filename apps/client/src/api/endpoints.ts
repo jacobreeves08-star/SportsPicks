@@ -13,6 +13,7 @@ import type {
   BatchPickResponse,
   CorrectResultResponse,
   CreatedLeague,
+  GolfCurrentResponse,
   HeadToHeadResponse,
   InviteCodeDetail,
   InvitePreview,
@@ -31,6 +32,7 @@ import type {
   StandingsTimeframe,
   UpdateProfileResponse,
   UserProfile,
+  WrittenGolfPick,
   WrittenPick,
 } from "./types.js";
 
@@ -119,6 +121,8 @@ export function createLeague(body: {
   timezone?: string;
   seasonStart: string;
   pickHorizonDays?: number;
+  golfPickCount?: number;
+  golfTopN?: number;
 }): Promise<CreatedLeague> {
   return apiFetch("/leagues", { method: "POST", body });
 }
@@ -135,9 +139,30 @@ export function getLeague(leagueId: string): Promise<LeagueWithMemberCount> {
 
 export function updateLeague(
   leagueId: string,
-  body: { name?: string; sports?: string[]; pickHorizonDays?: number },
+  body: { name?: string; sports?: string[]; pickHorizonDays?: number; golfPickCount?: number; golfTopN?: number },
 ): Promise<LeagueWithMemberCount> {
   return apiFetch(`/leagues/${leagueId}`, { method: "PATCH", body });
+}
+
+/** The one tournament to show right now — not date-scoped like the
+ * slate, since golf has at most one relevant event in flight at a time.
+ * See docs/sports-pipeline.md. */
+export function getCurrentGolf(leagueId: string): Promise<GolfCurrentResponse> {
+  return apiFetch(`/leagues/${leagueId}/golf/current`);
+}
+
+/** A full replace of the member's golfer selections for the tournament,
+ * not an incremental add — must be exactly `golfPickCount` golfers. */
+export function putGolfPick(
+  leagueId: string,
+  memberId: string,
+  tournamentId: string,
+  golferExternalIds: string[],
+): Promise<WrittenGolfPick> {
+  return apiFetch(`/leagues/${leagueId}/members/${memberId}/golf-pick/${tournamentId}`, {
+    method: "PUT",
+    body: { golferExternalIds },
+  });
 }
 
 export function deleteLeague(leagueId: string): Promise<void> {

@@ -81,10 +81,20 @@ export const league = pgTable(
     // check below caps it at 30 so a league can't accidentally recreate
     // the old unbounded behavior.
     pickHorizonDays: integer("pick_horizon_days").notNull().default(7),
+    // Golf settings (JAC-56): how many golfers a member picks per
+    // tournament, and how far down the leaderboard (by `order`, see
+    // lib/golf-provider.ts) still counts as a correct pick. Commissioner-
+    // configurable via PATCH /:leagueId, same as pickHorizonDays.
+    golfPickCount: integer("golf_pick_count").notNull().default(3),
+    golfTopN: integer("golf_top_n").notNull().default(10),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [check("league_pick_horizon_days_check", sql`${t.pickHorizonDays} between 1 and 30`)],
+  (t) => [
+    check("league_pick_horizon_days_check", sql`${t.pickHorizonDays} between 1 and 30`),
+    check("league_golf_pick_count_check", sql`${t.golfPickCount} between 1 and 10`),
+    check("league_golf_top_n_check", sql`${t.golfTopN} between 1 and 50`),
+  ],
 );
 
 export const leagueMember = pgTable(
@@ -299,6 +309,100 @@ export const resultCorrection = pgTable(
   (t) => [
     check("result_correction_source_check", sql`${t.source} in ('provider_revision', 'manual')`),
     index("result_correction_game_id_idx").on(t.gameId),
+  ],
+);
+
+// A golf tournament (JAC-56). Doesn't fit the game/pick model — a
+// tournament has ~69 competitors sharing one leaderboard, not a 2-sided
+// matchup — so it's its own small parallel structure to game/pick/result
+// rather than a variant of them. See docs/sports-pipeline.md.
+export const tournament = pgTable(
+  "tournament",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    externalId: text("external_id").unique(),
+    name: text("name").notNull(),
+    startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
+    // Standings credit for a golf pick posts on the calendar day this
+    // falls on (confirmed design decision), not spread across the
+    // tournament's multi-day span — see lib/standings.ts.
+    endsAt: timestamp("ends_at", { withTimezone: true }).notNull(),
+    status: text("status").notNull().default("scheduled"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    check(
+      "tournament_status_check",
+      sql`${t.status} in ('scheduled', 'in_progress', 'final', 'postponed', 'canceled')`,
+    ),
+    index("tournament_status_starts_at_idx").on(t.status, t.startsAt),
+  ],
+);
+
+// One row per golfer in a tournament's field. `position` is the live/
+// final leaderboard rank (null until the provider posts one) — see
+// lib/golf-provider.ts for why there's no separate cut/withdrawn marker.
+export const tournamentEntry = pgTable(
+  "tournament_entry",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    tournamentId: uuid("tournament_id")
+      .notNull()
+      .references(() => tournament.id),
+    externalId: text("external_id").notNull(),
+    golferName: text("golfer_name").notNull(),
+    position: integer("position"),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [unique("tournament_entry_tournament_external_unique").on(t.tournamentId, t.externalId)],
+);
+
+// One row per member per tournament — scored as a single win/loss for
+// the whole tournament (confirmed design), not per golfer. Unlike
+// pick.outcome, this is re-graded on every leaderboard poll while the
+// tournament is live (confirmed design), not graded once — see
+// lib/golf-grading.ts.
+export const golfPick = pgTable(
+  "golf_pick",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    leagueMemberId: uuid("league_member_id")
+      .notNull()
+      .references(() => leagueMember.id),
+    tournamentId: uuid("tournament_id")
+      .notNull()
+      .references(() => tournament.id),
+    outcome: text("outcome"),
+    gradedAt: timestamp("graded_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("golf_pick_league_member_tournament_unique").on(t.leagueMemberId, t.tournamentId),
+    check("golf_pick_outcome_check", sql`${t.outcome} in ('win', 'loss', 'void')`),
+    index("golf_pick_tournament_id_idx").on(t.tournamentId),
+  ],
+);
+
+// The golfers within one golf_pick (golfPickCount of them, per league
+// setting). Unrestricted overlap across members (confirmed design) — no
+// unique constraint on (tournamentId, tournamentEntryId) globally, only
+// per-pick.
+export const golfPickSelection = pgTable(
+  "golf_pick_selection",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    golfPickId: uuid("golf_pick_id")
+      .notNull()
+      .references(() => golfPick.id),
+    tournamentEntryId: uuid("tournament_entry_id")
+      .notNull()
+      .references(() => tournamentEntry.id),
+  },
+  (t) => [
+    unique("golf_pick_selection_pick_entry_unique").on(t.golfPickId, t.tournamentEntryId),
+    index("golf_pick_selection_golf_pick_id_idx").on(t.golfPickId),
   ],
 );
 

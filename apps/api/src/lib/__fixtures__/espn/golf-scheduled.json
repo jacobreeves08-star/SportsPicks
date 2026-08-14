@@ -1,0 +1,30 @@
+{
+  "id": "401811963",
+  "name": "BMW Championship",
+  "date": "2026-08-20T04:00Z",
+  "endDate": "2026-08-23T04:00Z",
+  "status": {
+    "type": {
+      "id": "1",
+      "name": "STATUS_SCHEDULED",
+      "state": "pre",
+      "completed": false,
+      "description": "Scheduled"
+    }
+  },
+  "competitions": [
+    {
+      "id": "401811963",
+      "date": "2026-08-20T04:00Z",
+      "status": {
+        "type": {
+          "id": "1",
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false,
+          "description": "Scheduled"
+        }
+      }
+    }
+  ]
+}

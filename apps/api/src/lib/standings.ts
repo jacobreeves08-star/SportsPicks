@@ -165,6 +165,90 @@ async function fetchClusterPicks(
 }
 
 /**
+ * Golf's parallel to fetchRecords (JAC-56) — same shape, but joined
+ * against `tournament.ends_at` rather than `game.starts_at`. Credit for
+ * a golf pick posts on the day its tournament CONCLUDES (confirmed
+ * design), matching how a game's result posts on the game's own day —
+ * a multi-day tournament isn't spread across the days it spans.
+ */
+async function fetchGolfRecords(
+  executor: typeof db,
+  memberIds: string[],
+  start: Date,
+  end: Date | null,
+): Promise<Map<string, { wins: number; losses: number; gamesParticipated: number }>> {
+  const memberIdsSql = sql.join(
+    memberIds.map((id) => sql`${id}`),
+    sql`, `,
+  );
+  const rows = await executor.execute<{
+    league_member_id: string;
+    wins: number;
+    losses: number;
+    games_participated: number;
+  }>(sql`
+    select
+      gp.league_member_id,
+      count(*) filter (where gp.outcome = 'win')::int as wins,
+      count(*) filter (where gp.outcome = 'loss')::int as losses,
+      count(*) filter (where gp.outcome != 'void')::int as games_participated
+    from golf_pick gp
+    join tournament t on t.id = gp.tournament_id
+    where gp.league_member_id in (${memberIdsSql})
+      and gp.outcome is not null
+      and t.ends_at >= ${start}
+      and (${end}::timestamptz is null or t.ends_at < ${end})
+    group by gp.league_member_id
+  `);
+  return new Map(
+    rows.rows.map((r) => [
+      r.league_member_id,
+      { wins: r.wins, losses: r.losses, gamesParticipated: r.games_participated },
+    ]),
+  );
+}
+
+/**
+ * Golf's parallel to fetchClusterPicks. Reuses ClusterPick.gameId as an
+ * opaque key holding the tournament's id instead — every read site only
+ * ever uses it for Set-based "commonly picked" intersection/lookup, so
+ * mixing game ids and tournament ids in the same array is safe and,
+ * usefully, means a shared golf tournament can factor into the same
+ * head-to-head tiebreak as a shared game with zero extra logic.
+ */
+async function fetchGolfClusterPicks(
+  executor: typeof db,
+  memberIds: string[],
+  start: Date,
+  end: Date | null,
+): Promise<ClusterPick[]> {
+  const memberIdsSql = sql.join(
+    memberIds.map((id) => sql`${id}`),
+    sql`, `,
+  );
+  const rows = await executor.execute<{
+    league_member_id: string;
+    tournament_id: string;
+    outcome: "win" | "loss";
+    graded_at: string;
+  }>(sql`
+    select gp.league_member_id, gp.tournament_id, gp.outcome, gp.graded_at
+    from golf_pick gp
+    join tournament t on t.id = gp.tournament_id
+    where gp.league_member_id in (${memberIdsSql})
+      and gp.outcome in ('win', 'loss')
+      and t.ends_at >= ${start}
+      and (${end}::timestamptz is null or t.ends_at < ${end})
+  `);
+  return rows.rows.map((r) => ({
+    leagueMemberId: r.league_member_id,
+    gameId: r.tournament_id,
+    outcome: r.outcome,
+    gradedAt: new Date(r.graded_at),
+  }));
+}
+
+/**
  * Resolves one win%-tied cluster via the remaining tiebreaker chain.
  * Levels 3 (head-to-head) and 4 (recency) are expressed as a single
  * composite sort rather than literal sequential re-clustering — a
@@ -253,14 +337,16 @@ export async function computeStandings(
     async (tx) => {
       const executor = tx as unknown as typeof db;
       const recordsByMember = await fetchRecords(executor, memberIds, start, end);
+      const golfRecordsByMember = await fetchGolfRecords(executor, memberIds, start, end);
 
       const records: MemberRecord[] = activeMembers.map((m) => {
         const r = recordsByMember.get(m.leagueMemberId);
+        const g = golfRecordsByMember.get(m.leagueMemberId);
         return {
           ...m,
-          wins: r?.wins ?? 0,
-          losses: r?.losses ?? 0,
-          gamesParticipated: r?.gamesParticipated ?? 0,
+          wins: (r?.wins ?? 0) + (g?.wins ?? 0),
+          losses: (r?.losses ?? 0) + (g?.losses ?? 0),
+          gamesParticipated: (r?.gamesParticipated ?? 0) + (g?.gamesParticipated ?? 0),
         };
       });
 
@@ -277,7 +363,13 @@ export async function computeStandings(
       }
 
       const tiedMemberIds = clusters.filter((c) => c.length > 1).flatMap((c) => c.map((m) => m.leagueMemberId));
-      const clusterPicks = tiedMemberIds.length > 0 ? await fetchClusterPicks(executor, tiedMemberIds, start, end) : [];
+      const clusterPicks =
+        tiedMemberIds.length > 0
+          ? [
+              ...(await fetchClusterPicks(executor, tiedMemberIds, start, end)),
+              ...(await fetchGolfClusterPicks(executor, tiedMemberIds, start, end)),
+            ]
+          : [];
 
       return clusters.map((cluster) => resolveCluster(cluster, clusterPicks)).flat();
     },

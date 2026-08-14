@@ -68,6 +68,8 @@ function leagueDetail(overrides: Partial<LeagueWithMemberCount> = {}): LeagueWit
     timezone: "America/Chicago",
     seasonStart: "2026-09-01",
     pickHorizonDays: 7,
+    golfPickCount: 3,
+    golfTopN: 10,
     createdAt: "2026-08-01T00:00:00.000Z",
     updatedAt: "2026-08-01T00:00:00.000Z",
     memberCount: 4,
@@ -132,6 +134,41 @@ describe("LeagueSettingsScreen", () => {
 
     expect(await screen.findByText("Pick at least one sport.")).toBeInTheDocument();
     expect(updateLeague).not.toHaveBeenCalled();
+  });
+
+  it("hides the golf settings for a league that doesn't cover golf", async () => {
+    await mockShell({ sports: ["nfl"] });
+    await renderRouteAt("/leagues/league-1/settings");
+
+    await screen.findByLabelText("Name");
+    expect(screen.queryByLabelText("Golfers per tournament")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Winning finish")).not.toBeInTheDocument();
+  });
+
+  it("shows and saves the golf settings for a golf league", async () => {
+    await mockShell({ sports: ["golf"], golfPickCount: 3, golfTopN: 10 });
+    const { updateLeague } = await import("../../api/endpoints.js");
+    vi.mocked(updateLeague).mockResolvedValue(leagueDetail({ sports: ["golf"], golfPickCount: 5, golfTopN: 20 }));
+
+    await renderRouteAt("/leagues/league-1/settings");
+    await screen.findByLabelText("Name");
+
+    expect(screen.getByLabelText("Golfers per tournament")).toHaveValue("3");
+    expect(screen.getByLabelText("Winning finish")).toHaveValue("10");
+
+    fireEvent.change(screen.getByLabelText("Golfers per tournament"), { target: { value: "5" } });
+    fireEvent.change(screen.getByLabelText("Winning finish"), { target: { value: "20" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
+
+    await waitFor(() =>
+      expect(updateLeague).toHaveBeenCalledWith("league-1", {
+        name: "AFC League",
+        sports: ["golf"],
+        pickHorizonDays: 7,
+        golfPickCount: 5,
+        golfTopN: 20,
+      }),
+    );
   });
 
   it("shows an access-denied message for a non-commissioner, instead of the form", async () => {

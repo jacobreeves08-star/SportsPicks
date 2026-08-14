@@ -19,6 +19,8 @@ Fastify's built-in logger is wired to `apps/api/src/lib/logger.ts` (Pino, JSON, 
 - `schedule-ingest.ts` — fires if all 11 tracked sports return zero games in a single run. A per-sport zero is often legitimate (e.g. no NBA games in August); all-sports-zero simultaneously is not, given this app's combined near-year-round coverage.
 - `score-poll.ts` — fires if `findStaleGames()` (`apps/api/src/lib/game-staleness.ts`) finds any game past its sport's expected maximum duration (a per-sport table, e.g. NFL 4.5h, soccer 2.5h) still without a final result.
 
+`golf-ingest` deliberately has NO equivalent zero-result alert: golf has frequent legitimate off-weeks (between tournaments, and the off-season), so a run finding zero tournaments is expected rather than anomalous — unlike the 11-sport near-year-round coverage that makes an all-sports-zero `schedule-ingest` run genuinely suspicious.
+
 Neither call marks the run as failed (`job_run.succeeded` stays `true`) — the job genuinely did what it was supposed to; the data itself looks wrong, which is a distinct signal from "the code threw" and is reported through a distinct channel on purpose. See `docs/sports-pipeline.md` and `docs/adr/0003-sports-data-pipeline.md` for the full design reasoning.
 
 ## Uptime check
@@ -44,6 +46,7 @@ The fix is a **dead-man's-switch / heartbeat monitor** (`apps/api/src/lib/heartb
 | `score-poll` | `HEARTBEAT_URL` | every 5 minutes |
 | `schedule-ingest` (JAC-19–24) | `SCHEDULE_INGEST_HEARTBEAT_URL` | every 4 hours |
 | `anonymize-accounts` (JAC-18) | `ANONYMIZATION_HEARTBEAT_URL` | daily |
+| `golf-ingest` (JAC-56) | `GOLF_INGEST_HEARTBEAT_URL` | every 15 minutes |
 
 Sharing one monitor between two jobs on two different schedules would make "did it run on time" meaningless for both — a monitor configured for a 5-minute window would falsely alert on the daily job between its runs, and one configured for a day would never notice the 5-minute job going quiet for hours.
 

@@ -112,6 +112,24 @@ export function SlateScreen() {
         </div>
       </Stack>
 
+      {/* Golf never appears on the slate itself — a tournament isn't a
+          game and has no per-day rows — so this is how a golf league
+          reaches it. Only rendered when the league actually covers golf,
+          rather than adding a 5th bottom-nav item that would be dead for
+          every other league. */}
+      {league.sports.includes("golf") ? (
+        <Link to="/leagues/$leagueId/golf" params={{ leagueId }} className={styles.golfLink}>
+          <Surface variant="raised" radius="md" padding={3}>
+            <Stack direction="row" justify="between" align="center">
+              <Text weight="medium">Golf tournament</Text>
+              <Text size="sm" color="dim">
+                View →
+              </Text>
+            </Stack>
+          </Surface>
+        </Link>
+      ) : null}
+
       {groups.length === 0 ? (
         <EmptyState title="No games" description="Nothing on the slate for this day." />
       ) : (

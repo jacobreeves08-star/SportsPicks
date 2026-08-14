@@ -42,6 +42,9 @@ league
   commissioner_id  -> user.id
   timezone
   season_start (date)  -- calendar date, no time component
+  pick_horizon_days    -- how far ahead a game is pickable (1-30, default 7)
+  golf_pick_count      -- golfers picked per tournament (1-10, default 3), golf leagues only
+  golf_top_n           -- leaderboard finish that counts as a win (1-50, default 10)
   created_at / updated_at
 
 league_member
@@ -126,9 +129,51 @@ pick_audit_log            -- APPEND-ONLY (JAC-31-36); never updated or deleted b
   action           ('create' | 'change')
   created_at       -- server time of the write; the record of "when," not just "what"
 
+-- Golf (JAC-56) — a PARALLEL structure to game/pick/result, not a variant of
+-- it: a tournament is one ~69-competitor leaderboard, not a 2-sided matchup,
+-- so none of the tables above fit. See docs/sports-pipeline.md's Golf section.
+tournament
+  id (uuid, pk)
+  external_id (unique, nullable)  -- provider id, for idempotent golf-ingest upserts
+  name
+  starts_at (timestamptz, UTC)    -- the pick lock for every golf_pick on it
+  ends_at (timestamptz, UTC)      -- standings credit posts on the day this falls on
+  status  ('scheduled'|'in_progress'|'final'|'postponed'|'canceled')
+  created_at / updated_at
+
+tournament_entry          -- one row per golfer in the field
+  id (uuid, pk)
+  tournament_id -> tournament.id
+  external_id             -- provider's per-golfer id; what a selection references, so a
+                           -- mid-tournament name correction can't orphan an existing pick
+  golfer_name
+  position (nullable)     -- live/final leaderboard rank (1 = leader), from ESPN's `order`.
+                           -- Null = not yet posted; never counted as a top-N finish.
+  updated_at
+  UNIQUE (tournament_id, external_id)
+
+golf_pick                 -- one row per member per tournament; ONE win/loss for the whole
+                           -- tournament, not per golfer
+  id (uuid, pk)
+  league_member_id -> league_member.id
+  tournament_id    -> tournament.id
+  outcome (nullable)      -- ('win'|'loss'|'void'). Unlike pick.outcome, RE-GRADED on every
+                           -- leaderboard poll while the tournament is live — see
+                           -- lib/golf-grading.ts. 'void' if postponed/cancelled.
+  graded_at (nullable)
+  created_at / updated_at
+  UNIQUE (league_member_id, tournament_id)
+
+golf_pick_selection       -- the golfers within one golf_pick (league.golf_pick_count of them)
+  id (uuid, pk)
+  golf_pick_id       -> golf_pick.id
+  tournament_entry_id -> tournament_entry.id
+  UNIQUE (golf_pick_id, tournament_entry_id)   -- per-pick only: two MEMBERS may pick the
+                                                 -- same golfer (confirmed design)
+
 job_run                  -- cross-run memory for stateless cron-triggered jobs (JAC-24)
   id (uuid, pk)
-  job_name                -- 'schedule-ingest' | 'score-poll'
+  job_name                -- 'schedule-ingest' | 'score-poll' | 'golf-ingest'
   started_at / finished_at (nullable)
   succeeded (nullable)
   item_count (nullable)   -- games upserted (schedule-ingest) or finalized (score-poll) this run

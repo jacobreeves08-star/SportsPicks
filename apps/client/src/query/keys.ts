@@ -33,4 +33,7 @@ export const queryKeys = {
   /** The caller's own "yesterday, across every league" digest — not
    * scoped to any one league (the underlying endpoint isn't either). */
   resultsDigest: () => ["users", "me", "results-digest"] as const,
+  /** The one current golf tournament for a league — not date-scoped
+   * (the endpoint isn't either), unlike `slate`. */
+  golfCurrent: (leagueId: string) => ["leagues", leagueId, "golf", "current"] as const,
 };
