@@ -43,7 +43,7 @@
 .table td {
   padding: var(--space-3);
   text-align: left;
-  border-bottom: 1px solid rgba(18, 19, 26, 0.06);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   white-space: nowrap;
 }
 
@@ -55,7 +55,7 @@
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--color-text-dim);
-  border-bottom: 1.5px solid rgba(18, 19, 26, 0.1);
+  border-bottom: 1.5px solid rgba(255, 255, 255, 0.1);
 }
 
 .table tbody tr:last-child td,
@@ -65,7 +65,7 @@
 
 .table tbody tr:hover td,
 .table tbody tr:hover th {
-  background-color: rgba(18, 19, 26, 0.02);
+  background-color: rgba(255, 255, 255, 0.02);
 }
 
 .gameCell {
@@ -84,7 +84,7 @@
    somehow both (handled by the caller choosing one class). */
 .splitRow td,
 .splitRow th {
-  background-color: rgba(67, 56, 202, 0.04);
+  background-color: rgba(215, 255, 43, 0.06);
 }
 
 .allWrongRow td,

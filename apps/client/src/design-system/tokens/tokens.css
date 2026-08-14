@@ -10,36 +10,48 @@
  * Tokens are named by MEANING, never by hue — `--color-result-miss`,
  * not `--color-red`. A future re-theme only ever touches this file.
  *
- * Visual language (redesign pass): a crisp indigo accent, cool-neutral
- * surfaces, soft layered shadows instead of hard borders for depth,
- * and a wider radius scale — the "sleek SaaS" register (Linear/Vercel/
- * Stripe), chosen because this app's own density (dense standings
- * tables, a 10-game slate) benefits from calm neutrals and one
- * confident accent color rather than a busy, saturated palette.
+ * Visual language (dark-neon redesign pass): near-black surfaces, a
+ * single neon lime-yellow accent, and a bold condensed display face
+ * for headlines/nav/CTAs — matched directly to a reference design the
+ * user supplied ("WIN THE WATERCOOLER"-style hero: black background,
+ * lime accent, pill badges/buttons, uppercase condensed type). Applied
+ * as a pure re-skin of the existing token set — every token keeps its
+ * original MEANING (see contrast.test.ts, which still gates every
+ * pairing below at WCAG AA), only the hue/lightness changed. One
+ * consequence of going from a DARK accent (indigo, on light surfaces)
+ * to a LIGHT accent (lime, on dark surfaces): anywhere the accent is
+ * used as a solid fill, the text sitting on top of it flips from white
+ * to near-black — see every `color: #ffffff` paired with
+ * `background-color: var(--color-pick-mine)` across the component
+ * CSS, all updated alongside this file.
  */
 :root {
-  /* Type */
+  /* Type. --font-display is the bold condensed face (page titles, the
+     app-shell brand wordmark, primary button/badge labels) —
+     deliberately NOT used for body copy/dense tables/form fields,
+     which stay on --font-sans for legibility at small sizes. */
   --font-sans:
     "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-display: "Anton", "Arial Narrow", var(--font-sans);
 
   /* Surfaces */
-  --color-surface: #f7f7fb;
-  --color-surface-raised: #ffffff;
-  --color-border: #6b7280;
+  --color-surface: #0a0a0b;
+  --color-surface-raised: #18181b;
+  --color-border: #7a7a85;
 
   /* Text */
-  --color-text: #12131a;
-  --color-text-dim: #585e6e;
+  --color-text: #f5f5f7;
+  --color-text-dim: #a1a1aa;
 
   /* Semantic state/result colors — each is paired with a non-color
      signal (icon/weight/text) by the component that uses it; see
      indicators/. Never rely on hue alone anywhere in this app. */
-  --color-pick-mine: #4338ca;
-  --color-result-hit: #15803d;
-  --color-result-miss: #c0271b;
-  --color-state-locked: #8a5a00;
-  --color-state-open: #0f766e;
-  --color-state-stale: #47536b;
+  --color-pick-mine: #d7ff2b;
+  --color-result-hit: #4ade80;
+  --color-result-miss: #fb7185;
+  --color-state-locked: #fbbf24;
+  --color-state-open: #2dd4bf;
+  --color-state-stale: #a3a9b8;
 
   /* Not one of the Epic 9 brief's named tokens, added deliberately:
      ErrorState (a failed request/fetch) is a different CONCEPT from
@@ -48,10 +60,10 @@
      hue" cuts both ways. Keeping them separate tokens means a future
      re-theme of "what red means for a network error" can diverge from
      "what red means for a wrong pick" without a collateral change. */
-  --color-error: #c0271b;
+  --color-error: #fb7185;
 
   /* Focus */
-  --color-focus-ring: #4338ca;
+  --color-focus-ring: #d7ff2b;
 
   /* A soft accent wash for selected/active states (chips, the
      PickControl's selected side, an active nav item) — a tinted fill
@@ -60,9 +72,12 @@
      from --color-pick-mine at low opacity; kept as its own token
      (rather than an inline rgba() scattered across component CSS)
      for the same "one source of truth" reason every other token
-     exists. */
-  --color-pick-mine-wash: rgba(67, 56, 202, 0.08);
-  --color-pick-mine-wash-strong: rgba(67, 56, 202, 0.14);
+     exists. Higher opacity than the original light-theme value —
+     confirmed empirically that the light-theme's 0.08/0.14 reads as
+     nearly invisible once the tint is lime-on-near-black instead of
+     indigo-on-white. */
+  --color-pick-mine-wash: rgba(215, 255, 43, 0.14);
+  --color-pick-mine-wash-strong: rgba(215, 255, 43, 0.24);
 
   /* Spacing — 4px base, widening at the top (matches how this app's
      rows/sections actually grow, not a pure linear multiple). */
@@ -84,12 +99,16 @@
   --radius-full: 9999px;
 
   /* Elevation — box-shadow tokens, not raw shadow values inline
-     anywhere else. Soft, layered, low-opacity — depth without a hard
-     edge, so a card reads as "lifted" even where its border all but
-     disappears. */
+     anywhere else. Pure-black shadows (not the old --color-text-based
+     tint) at higher opacity than the light-theme originals — a tinted
+     shadow barely registers against a near-black page, so raised
+     surfaces here lean on --color-surface-raised actually being
+     lighter than --color-surface (a real fill difference) plus a
+     stronger black shadow, rather than the light theme's "soft tint on
+     white" approach. */
   --elevation-0: none;
-  --elevation-1: 0 1px 2px rgba(18, 19, 26, 0.04), 0 3px 10px rgba(18, 19, 26, 0.06);
-  --elevation-2: 0 4px 10px rgba(18, 19, 26, 0.06), 0 12px 32px rgba(18, 19, 26, 0.12);
+  --elevation-1: 0 1px 2px rgba(0, 0, 0, 0.4), 0 3px 10px rgba(0, 0, 0, 0.35);
+  --elevation-2: 0 4px 14px rgba(0, 0, 0, 0.5), 0 12px 32px rgba(0, 0, 0, 0.45);
 
   /* Motion — every transition in the design system reads these
      instead of a literal duration, so both triggers below can zero

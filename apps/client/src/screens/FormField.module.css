@@ -3,7 +3,7 @@
   width: 100%;
   min-height: 48px;
   padding: var(--space-2) var(--space-3);
-  border: 1.5px solid rgba(18, 19, 26, 0.12);
+  border: 1.5px solid rgba(255, 255, 255, 0.12);
   border-radius: var(--radius-md);
   background-color: var(--color-surface-raised);
   color: var(--color-text);
@@ -12,7 +12,7 @@
 }
 
 .input:hover {
-  border-color: rgba(18, 19, 26, 0.22);
+  border-color: rgba(255, 255, 255, 0.22);
 }
 
 .input:focus-visible {

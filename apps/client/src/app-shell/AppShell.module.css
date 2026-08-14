@@ -12,7 +12,11 @@
   gap: var(--space-3);
   padding: var(--space-3) var(--space-4);
   background-color: var(--color-surface-raised);
-  box-shadow: 0 1px 0 rgba(18, 19, 26, 0.06), 0 6px 20px rgba(18, 19, 26, 0.04);
+  /* A cast shadow reads as dark in both themes (it's darkening what's
+     beneath it, not highlighting an edge) — unlike the hairline
+     borders/dividers elsewhere in this redesign, which flipped from a
+     dark tint to a light tint. */
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.5), 0 6px 20px rgba(0, 0, 0, 0.35);
   position: sticky;
   top: 0;
   z-index: 2;
@@ -22,9 +26,11 @@
   text-decoration: none;
   color: var(--color-pick-mine);
   flex-shrink: 0;
-  font-size: 18px;
-  font-weight: 800;
-  letter-spacing: -0.01em;
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  font-size: 20px;
+  font-weight: 400;
+  letter-spacing: 0.01em;
 }
 
 .brand:focus-visible {
