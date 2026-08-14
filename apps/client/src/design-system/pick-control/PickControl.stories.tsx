@@ -34,6 +34,8 @@ const teamsWithLogos: PickControlTeams = {
   awayTeam: "Cardinals",
   homeTeamLogoUrl: "https://a.espncdn.com/i/teamlogos/mlb/500/scoreboard/chc.png",
   awayTeamLogoUrl: "https://a.espncdn.com/i/teamlogos/mlb/500/scoreboard/stl.png",
+  homeTeamColor: "0e3386",
+  awayTeamColor: "c41e3a",
   allowsDraw: false,
   startsAt: "2026-08-13T18:00:00.000Z",
 };
@@ -101,6 +103,11 @@ export const Queued: Story = {
 export const WithTeamLogos: Story = {
   name: "With team logos",
   args: { teams: teamsWithLogos, state: { status: "open", selected: null }, remainingMs: 90 * 60_000 },
+};
+
+export const WithTeamColorSelected: Story = {
+  name: "With team logos — Cardinals picked (turns their red)",
+  args: { teams: teamsWithLogos, state: { status: "open", selected: "Cardinals" }, remainingMs: 90 * 60_000 },
 };
 
 export const DrawEligibleOpen: Story = {

@@ -23,6 +23,10 @@ export interface CanonicalTeam {
   // future ESPN response shape change shouldn't be able to break
   // schedule ingestion just because an image URL went missing.
   logoUrl: string | null;
+  // ESPN's `team.color` — 6-digit hex, no leading '#' (e.g. "0e3386"),
+  // confirmed present alongside `logo` across every tracked sport
+  // against the live API. Same optional/null reasoning as logoUrl.
+  color: string | null;
 }
 
 export interface CanonicalScheduleEntry {
@@ -92,6 +96,7 @@ const espnTeamSchema = z.object({
   id: z.string(),
   displayName: z.string(),
   logo: z.string().optional(),
+  color: z.string().optional(),
 });
 
 const espnCompetitorSchema = z.object({
@@ -171,8 +176,18 @@ function mapEventToScheduleEntry(
     sport,
     startsAt: new Date(event.date),
     status,
-    homeTeam: { externalId: home.team.id, displayName: home.team.displayName, logoUrl: home.team.logo ?? null },
-    awayTeam: { externalId: away.team.id, displayName: away.team.displayName, logoUrl: away.team.logo ?? null },
+    homeTeam: {
+      externalId: home.team.id,
+      displayName: home.team.displayName,
+      logoUrl: home.team.logo ?? null,
+      color: home.team.color ?? null,
+    },
+    awayTeam: {
+      externalId: away.team.id,
+      displayName: away.team.displayName,
+      logoUrl: away.team.logo ?? null,
+      color: away.team.color ?? null,
+    },
     allowsDraw,
   };
 }

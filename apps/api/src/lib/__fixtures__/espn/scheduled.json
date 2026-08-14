@@ -14,7 +14,8 @@
           "team": {
             "id": "9",
             "displayName": "Minnesota Twins",
-            "logo": "https://a.espncdn.com/i/teamlogos/mlb/500/scoreboard/min.png"
+            "logo": "https://a.espncdn.com/i/teamlogos/mlb/500/scoreboard/min.png",
+            "color": "002b5c"
           }
         },
         {
@@ -23,7 +24,8 @@
           "team": {
             "id": "1",
             "displayName": "Baltimore Orioles",
-            "logo": "https://a.espncdn.com/i/teamlogos/mlb/500/scoreboard/bal.png"
+            "logo": "https://a.espncdn.com/i/teamlogos/mlb/500/scoreboard/bal.png",
+            "color": "df4601"
           }
         }
       ],

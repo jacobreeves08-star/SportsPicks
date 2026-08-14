@@ -29,6 +29,16 @@ export interface PickControlTeams {
    * renders text-only when absent. */
   homeTeamLogoUrl?: string | null;
   awayTeamLogoUrl?: string | null;
+  /** Team primary color, sourced from the provider (ESPN's
+   * `team.color`) as a 6-digit hex string with NO leading '#' (e.g.
+   * `"0e3386"`) — matches the wire format, converted to a real CSS
+   * color only at the point of use (team-selection-style.ts).
+   * Optional/nullable for the same reasons as the logo URLs; when
+   * absent (or too close to the page background to read as a filled
+   * selection) the selected side falls back to the plain accent
+   * treatment instead of an invisible/broken fill. */
+  homeTeamColor?: string | null;
+  awayTeamColor?: string | null;
   /** Gates the literal `'DRAW'` third side (docs/data-model.md,
    * docs/sports-pipeline.md — the three soccer competitions only). */
   allowsDraw: boolean;

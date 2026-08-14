@@ -12,6 +12,8 @@ function game(overrides: Partial<SlateGame> = {}): SlateGame {
     awayTeam: "Jets",
     homeTeamLogoUrl: null,
     awayTeamLogoUrl: null,
+    homeTeamColor: null,
+    awayTeamColor: null,
     startsAt: "2026-08-13T18:00:00.000Z",
     status: "scheduled",
     allowsDraw: false,

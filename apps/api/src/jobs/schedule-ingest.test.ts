@@ -31,8 +31,8 @@ function scheduleEntry(overrides: Partial<CanonicalScheduleEntry> = {}): Canonic
     sport: "nfl",
     startsAt: new Date("2026-09-14T17:00:00.000Z"),
     status: "scheduled",
-    homeTeam: { externalId: "1", displayName: "Home Team", logoUrl: null },
-    awayTeam: { externalId: "2", displayName: "Away Team", logoUrl: null },
+    homeTeam: { externalId: "1", displayName: "Home Team", logoUrl: null, color: null },
+    awayTeam: { externalId: "2", displayName: "Away Team", logoUrl: null, color: null },
     allowsDraw: false,
     ...overrides,
   };
@@ -70,12 +70,12 @@ describe("runScheduleIngest — idempotent upsert", () => {
 
   it("a name drift for the same team external ID is corrected on re-ingest", async () => {
     const provider1 = new MockSportsProvider({
-      schedule: [scheduleEntry({ homeTeam: { externalId: "1", displayName: "Old Name", logoUrl: null } })],
+      schedule: [scheduleEntry({ homeTeam: { externalId: "1", displayName: "Old Name", logoUrl: null, color: null } })],
     });
     await runScheduleIngest(provider1);
 
     const provider2 = new MockSportsProvider({
-      schedule: [scheduleEntry({ homeTeam: { externalId: "1", displayName: "New Name", logoUrl: null } })],
+      schedule: [scheduleEntry({ homeTeam: { externalId: "1", displayName: "New Name", logoUrl: null, color: null } })],
     });
     await runScheduleIngest(provider2);
 
@@ -88,7 +88,7 @@ describe("runScheduleIngest — idempotent upsert", () => {
     const provider1 = new MockSportsProvider({
       schedule: [
         scheduleEntry({
-          homeTeam: { externalId: "1", displayName: "Home Team", logoUrl: "https://a.espncdn.com/old.png" },
+          homeTeam: { externalId: "1", displayName: "Home Team", logoUrl: "https://a.espncdn.com/old.png", color: null },
         }),
       ],
     });
@@ -99,13 +99,33 @@ describe("runScheduleIngest — idempotent upsert", () => {
     const provider2 = new MockSportsProvider({
       schedule: [
         scheduleEntry({
-          homeTeam: { externalId: "1", displayName: "Home Team", logoUrl: "https://a.espncdn.com/new.png" },
+          homeTeam: { externalId: "1", displayName: "Home Team", logoUrl: "https://a.espncdn.com/new.png", color: null },
         }),
       ],
     });
     await runScheduleIngest(provider2);
     const [afterSecond] = await db.select().from(game).where(eq(game.externalId, "espn-1"));
     expect(afterSecond!.homeTeamLogoUrl).toBe("https://a.espncdn.com/new.png");
+  });
+
+  it("a team color is persisted on insert and corrected on re-ingest, same as the logo URL", async () => {
+    const provider1 = new MockSportsProvider({
+      schedule: [
+        scheduleEntry({ homeTeam: { externalId: "1", displayName: "Home Team", logoUrl: null, color: "0e3386" } }),
+      ],
+    });
+    await runScheduleIngest(provider1);
+    const [afterFirst] = await db.select().from(game).where(eq(game.externalId, "espn-1"));
+    expect(afterFirst!.homeTeamColor).toBe("0e3386");
+
+    const provider2 = new MockSportsProvider({
+      schedule: [
+        scheduleEntry({ homeTeam: { externalId: "1", displayName: "Home Team", logoUrl: null, color: "cc3433" } }),
+      ],
+    });
+    await runScheduleIngest(provider2);
+    const [afterSecond] = await db.select().from(game).where(eq(game.externalId, "espn-1"));
+    expect(afterSecond!.homeTeamColor).toBe("cc3433");
   });
 });
 
@@ -132,8 +152,8 @@ describe("runScheduleIngest — never downgrades an already-final game", () => {
         scheduleEntry({
           externalId: "espn-final-1",
           status: "final",
-          homeTeam: { externalId: "1", displayName: "Home Team", logoUrl: null },
-          awayTeam: { externalId: "2", displayName: "Away Team", logoUrl: null },
+          homeTeam: { externalId: "1", displayName: "Home Team", logoUrl: null, color: null },
+          awayTeam: { externalId: "2", displayName: "Away Team", logoUrl: null, color: null },
         }),
       ],
     });

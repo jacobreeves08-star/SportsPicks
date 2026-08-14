@@ -132,6 +132,8 @@ export function SlateScreen() {
                         awayTeam: game.awayTeam,
                         homeTeamLogoUrl: game.homeTeamLogoUrl,
                         awayTeamLogoUrl: game.awayTeamLogoUrl,
+                        homeTeamColor: game.homeTeamColor,
+                        awayTeamColor: game.awayTeamColor,
                         allowsDraw: game.allowsDraw,
                         startsAt: game.startsAt,
                       }}

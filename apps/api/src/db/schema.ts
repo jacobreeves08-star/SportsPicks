@@ -182,6 +182,11 @@ export const game = pgTable(
     // IDs above.
     homeTeamLogoUrl: text("home_team_logo_url"),
     awayTeamLogoUrl: text("away_team_logo_url"),
+    // ESPN's `competitor.team.color` — 6-digit hex, no leading '#'.
+    // Nullable/re-ingest-corrected for the same reasons as the logo
+    // URLs above.
+    homeTeamColor: text("home_team_color"),
+    awayTeamColor: text("away_team_color"),
     startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
     status: text("status").notNull().default("scheduled"),
     // Set by schedule-ingest based on sport (true only for soccer

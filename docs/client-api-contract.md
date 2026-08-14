@@ -83,6 +83,7 @@ Base path prefixes: `/auth`, `/users`, `/leagues` (three route files share this 
     {
       "gameId": "...", "sport": "nfl", "homeTeam": "...", "awayTeam": "...",
       "homeTeamLogoUrl": "https://a.espncdn.com/i/teamlogos/nfl/500/buf.png", "awayTeamLogoUrl": "...",
+      "homeTeamColor": "00338d", "awayTeamColor": "125740",
       "startsAt": "2026-08-13T17:30:00.000Z",
       "status": "scheduled",
       "allowsDraw": false,

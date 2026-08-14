@@ -28,6 +28,8 @@ interface SlateResponse {
     awayTeam: string;
     homeTeamLogoUrl: string | null;
     awayTeamLogoUrl: string | null;
+    homeTeamColor: string | null;
+    awayTeamColor: string | null;
     startsAt: Date;
     status: string;
     allowsDraw: boolean;
@@ -694,6 +696,8 @@ export async function leaguesRoutes(app: FastifyInstance): Promise<void> {
           away_team: string;
           home_team_logo_url: string | null;
           away_team_logo_url: string | null;
+          home_team_color: string | null;
+          away_team_color: string | null;
           starts_at: string;
           status: string;
           allows_draw: boolean;
@@ -709,6 +713,7 @@ export async function leaguesRoutes(app: FastifyInstance): Promise<void> {
         }>(sql`
           select
             g.id as game_id, g.sport, g.home_team, g.away_team, g.home_team_logo_url, g.away_team_logo_url,
+            g.home_team_color, g.away_team_color,
             g.starts_at, g.status, g.allows_draw,
             r.winning_team,
             (now() >= g.starts_at) as locked,
@@ -731,6 +736,7 @@ export async function leaguesRoutes(app: FastifyInstance): Promise<void> {
             and g.starts_at >= ${start} and g.starts_at < ${end}
             and lm.league_id = ${leagueId} and lm.left_at is null
           group by g.id, g.sport, g.home_team, g.away_team, g.home_team_logo_url, g.away_team_logo_url,
+            g.home_team_color, g.away_team_color,
             g.starts_at, g.status, g.allows_draw, r.winning_team
           order by g.starts_at
         `);
@@ -754,6 +760,8 @@ export async function leaguesRoutes(app: FastifyInstance): Promise<void> {
             awayTeam: row.away_team,
             homeTeamLogoUrl: row.home_team_logo_url,
             awayTeamLogoUrl: row.away_team_logo_url,
+            homeTeamColor: row.home_team_color,
+            awayTeamColor: row.away_team_color,
             startsAt: new Date(row.starts_at),
             status: row.status,
             allowsDraw: row.allows_draw,
