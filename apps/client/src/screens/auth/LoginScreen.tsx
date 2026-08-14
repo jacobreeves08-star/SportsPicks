@@ -54,12 +54,15 @@ export function LoginScreen() {
               Own the week.
             </p>
             <Text as="p" color="dim" className={styles.tagline}>
-              Weekly pick&rsquo;em leagues across football, basketball, baseball, and soccer — go head-to-head with
-              your own friends, not strangers.
+              Weekly pick&rsquo;em leagues across football, basketball, baseball, hockey, soccer, tennis, MMA, and
+              golf — go head-to-head with your own friends, not strangers.
             </Text>
           </Stack>
           <Stack direction="row" gap={2} wrap>
-            <span className={styles.pill}>8 sports</span>
+            {/* Keep in sync with SPORT_OPTIONS (src/leagues/sports.ts) —
+                11 ESPN-backed codes plus golf, which runs on its own
+                tournament pipeline. */}
+            <span className={styles.pill}>12 sports</span>
             <span className={styles.pill}>Friend leagues</span>
             <span className={styles.pill}>Live standings</span>
           </Stack>
