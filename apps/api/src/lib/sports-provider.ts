@@ -31,7 +31,7 @@ export interface CanonicalTeam {
 
 export interface CanonicalScheduleEntry {
   externalId: string;
-  sport: string; // nfl|ncaaf|nba|ncaamb|mlb|epl|ucl|mls
+  sport: string; // nfl|ncaaf|nba|ncaamb|mlb|nhl|epl|ucl|mls
   startsAt: Date;
   status: CanonicalGameStatus;
   homeTeam: CanonicalTeam;
@@ -68,20 +68,70 @@ export interface SportsProvider {
 
 /**
  * Sport code -> ESPN URL slug + draw eligibility. Single source of
- * truth: schedule-ingest reads this to know which 8 codes to loop, and
+ * truth: schedule-ingest reads this to know which 9 codes to loop, and
  * to stamp game.allows_draw — no sport-code knowledge is duplicated
  * anywhere else (not even in SQL — see the pick-validation trigger,
  * which reads game.allows_draw rather than hardcoding a sport list).
+ *
+ * NHL confirmed structurally identical to the other team sports here
+ * (exactly 2 competitors per event, each with homeAway + a team
+ * object) against the live API — a genuine drop-in.
+ *
+ * Tennis and MMA are genuinely individual sports (no "team"), but each
+ * MATCH/fight is still a real 2-competitor head-to-head, same as
+ * every sport above — just packaged differently by ESPN:
+ *   - "individual-grouped" (tennis): one ESPN "event" is an entire
+ *     ~2-week TOURNAMENT, not a match. Real matches live nested under
+ *     event.groupings[].competitions[] — one grouping per draw
+ *     (Men's Singles, Women's Singles, Men's Doubles, ...). Doubles
+ *     groupings are deliberately excluded (a doubles "competitor" is
+ *     a pair, not a single participant — out of scope); singles
+ *     matches genuinely have `homeAway` on each competitor, same as
+ *     a team sport. `tennis/atp`'s scoreboard already includes BOTH
+ *     tours' singles draws for a combined event week (confirmed live:
+ *     `tennis/atp` and `tennis/wta` return the identical "Cincinnati
+ *     Open" event with both Men's and Women's groupings on either
+ *     slug) — hitting both would double-ingest the same matches, so
+ *     only `atp` is queried, and the app-level sport code is the
+ *     gender-neutral `tennis`, not `atp`.
+ *   - "individual-flat" (MMA): one ESPN "event" is a whole fight CARD
+ *     (e.g. "UFC 330"), and event.competitions[] already holds EVERY
+ *     fight on that card directly (no extra nesting) — but each
+ *     fight's own `id`/`date`/`status` live on the competition, not
+ *     the event (a card's fights don't share one start time).
+ *     Competitors carry no `homeAway` field at all, only `order`
+ *     (1/2) — synthesized into home/away below, arbitrarily but
+ *     consistently, the same way this whole app treats home/away as
+ *     "two distinguishable sides to pick between", never a meaningful
+ *     home-field signal in its own right.
+ *
+ * Golf is NOT included: a PGA event has ~69 athlete competitors in
+ * one shared leaderboard, not a 2-competitor matchup at all — it
+ * doesn't fit this adapter's shape (or this app's pick-a-side model)
+ * no matter how the raw shape is reprocessed.
  */
-export const ESPN_SPORT_SLUGS: Record<string, { espnSport: string; espnLeague: string; allowsDraw: boolean }> = {
-  nfl: { espnSport: "football", espnLeague: "nfl", allowsDraw: false },
-  ncaaf: { espnSport: "football", espnLeague: "college-football", allowsDraw: false },
-  nba: { espnSport: "basketball", espnLeague: "nba", allowsDraw: false },
-  ncaamb: { espnSport: "basketball", espnLeague: "mens-college-basketball", allowsDraw: false },
-  mlb: { espnSport: "baseball", espnLeague: "mlb", allowsDraw: false },
-  epl: { espnSport: "soccer", espnLeague: "eng.1", allowsDraw: true },
-  ucl: { espnSport: "soccer", espnLeague: "uefa.champions", allowsDraw: true },
-  mls: { espnSport: "soccer", espnLeague: "usa.1", allowsDraw: true },
+type MatchStyle = "team" | "individual-flat" | "individual-grouped";
+
+export const ESPN_SPORT_SLUGS: Record<
+  string,
+  { espnSport: string; espnLeague: string; allowsDraw: boolean; matchStyle: MatchStyle }
+> = {
+  nfl: { espnSport: "football", espnLeague: "nfl", allowsDraw: false, matchStyle: "team" },
+  ncaaf: { espnSport: "football", espnLeague: "college-football", allowsDraw: false, matchStyle: "team" },
+  nba: { espnSport: "basketball", espnLeague: "nba", allowsDraw: false, matchStyle: "team" },
+  ncaamb: {
+    espnSport: "basketball",
+    espnLeague: "mens-college-basketball",
+    allowsDraw: false,
+    matchStyle: "team",
+  },
+  mlb: { espnSport: "baseball", espnLeague: "mlb", allowsDraw: false, matchStyle: "team" },
+  nhl: { espnSport: "hockey", espnLeague: "nhl", allowsDraw: false, matchStyle: "team" },
+  epl: { espnSport: "soccer", espnLeague: "eng.1", allowsDraw: true, matchStyle: "team" },
+  ucl: { espnSport: "soccer", espnLeague: "uefa.champions", allowsDraw: true, matchStyle: "team" },
+  mls: { espnSport: "soccer", espnLeague: "usa.1", allowsDraw: true, matchStyle: "team" },
+  tennis: { espnSport: "tennis", espnLeague: "atp", allowsDraw: false, matchStyle: "individual-grouped" },
+  mma: { espnSport: "mma", espnLeague: "ufc", allowsDraw: false, matchStyle: "individual-flat" },
 };
 
 // --- Raw ESPN response shape (only the fields actually read) ---------------
@@ -99,26 +149,65 @@ const espnTeamSchema = z.object({
   color: z.string().optional(),
 });
 
+// Individual sports (tennis/MMA) carry an `athlete` object instead of
+// `team` — same "who is this side" question, different ESPN field
+// name. Only `displayName` is read; a competitor's own top-level `id`
+// (below) already works as a stable external ID for both shapes.
+const espnAthleteSchema = z.object({
+  displayName: z.string(),
+});
+
 const espnCompetitorSchema = z.object({
-  homeAway: z.enum(["home", "away"]),
+  id: z.string(),
+  // Present on every team-sport competitor; ABSENT (not a third enum
+  // value) on MMA competitors, which carry `order` instead — see
+  // ESPN_SPORT_SLUGS's "individual-flat" doc comment for how that's
+  // synthesized into home/away.
+  homeAway: z.enum(["home", "away"]).optional(),
+  order: z.number().optional(),
   // Absent (not `false`) on pre-game events — confirmed against a real
   // captured ESPN response for a not-yet-started game. Optional here,
   // and every read-site treats "not exactly true" as "not the winner"
   // (`c.winner` truthiness check), so undefined behaves the same as
   // false without needing special-casing.
   winner: z.boolean().optional(),
-  team: espnTeamSchema,
+  team: espnTeamSchema.optional(),
+  athlete: espnAthleteSchema.optional(),
 });
 
 const espnCompetitionSchema = z.object({
+  // A single MATCH's own identity — for team sports this is identical
+  // to the parent event's id/date (confirmed live: NFL/MLB/etc. always
+  // have exactly one competition per event, sharing the event's own
+  // id/date exactly), so reading it here uniformly costs team sports
+  // nothing while being the ONLY correct source for MMA (many fights,
+  // many start times, one shared event/card) and tennis (a match's own
+  // id/date, nested under groupings — the event itself is the whole
+  // tournament, not a match).
+  id: z.string(),
+  date: z.string(),
   competitors: z.array(espnCompetitorSchema).length(2),
   status: z.object({ type: espnStatusTypeSchema }),
+});
+
+type EspnCompetition = z.infer<typeof espnCompetitionSchema>;
+
+// Tennis-only: one grouping per draw (Men's Singles, Women's Singles,
+// Men's Doubles, Women's Doubles, ...) — see ESPN_SPORT_SLUGS's
+// "individual-grouped" doc comment for why only singles are read.
+const espnGroupingSchema = z.object({
+  grouping: z.object({ displayName: z.string() }),
+  competitions: z.array(espnCompetitionSchema),
 });
 
 const espnEventSchema = z.object({
   id: z.string(),
   date: z.string(),
-  competitions: z.array(espnCompetitionSchema).min(1),
+  // Optional, not required: a tennis "event" (a whole tournament) has
+  // NO `competitions` field at all, only `groupings` — confirmed live.
+  // Team sports and MMA have `competitions` but no `groupings`.
+  competitions: z.array(espnCompetitionSchema).optional(),
+  groupings: z.array(espnGroupingSchema).optional(),
 });
 
 type EspnEvent = z.infer<typeof espnEventSchema>;
@@ -126,6 +215,55 @@ type EspnEvent = z.infer<typeof espnEventSchema>;
 const espnScoreboardResponseSchema = z.object({
   events: z.array(z.unknown()).default([]),
 });
+
+/** Flattens one ESPN event down to its real, individually-startable
+ * matches — see ESPN_SPORT_SLUGS's per-matchStyle doc comments for
+ * why this differs by sport. Every other function in this file
+ * operates on the resulting EspnCompetition, never the raw event,
+ * past this point. */
+function extractMatches(event: EspnEvent, matchStyle: MatchStyle): EspnCompetition[] {
+  if (matchStyle === "individual-grouped") {
+    return (event.groupings ?? [])
+      .filter((g) => /singles/i.test(g.grouping.displayName))
+      .flatMap((g) => g.competitions);
+  }
+  return event.competitions ?? [];
+}
+
+/** `c.homeAway` when present (every team sport, and tennis); MMA has
+ * no such field at all, only `order` — order 1 becomes "home", order
+ * 2 (or anything else) becomes "away". Arbitrary but consistent, and
+ * no different in kind from every other sport here: home/away is
+ * never read as a meaningful home-field signal anywhere in this app,
+ * only as "two distinguishable sides to pick between" (see
+ * CanonicalResult's own doc comment on winnerSide). */
+function sideOf(competitor: { homeAway?: "home" | "away"; order?: number }, fallbackIndex: number): "home" | "away" {
+  if (competitor.homeAway) return competitor.homeAway;
+  return (competitor.order ?? fallbackIndex + 1) === 1 ? "home" : "away";
+}
+
+function participantOf(competitor: {
+  id: string;
+  team?: { id: string; displayName: string; logo?: string; color?: string };
+  athlete?: { displayName: string };
+}): CanonicalTeam | null {
+  const displayName = competitor.team?.displayName ?? competitor.athlete?.displayName;
+  if (!displayName) return null;
+  return {
+    // Prefer the TEAM's own id for team sports — that's the stable
+    // per-franchise join key `game.home_team_external_id` has always
+    // held, and changing it would orphan existing rows. Individual
+    // sports have no team object, so the competitor's own id (which is
+    // the athlete's id there) is the only stable identifier available.
+    externalId: competitor.team?.id ?? competitor.id,
+    displayName,
+    // Only teams carry these — an athlete competitor (tennis/MMA) has
+    // no crest or team color, so both stay null rather than being
+    // faked from something unrelated.
+    logoUrl: competitor.team?.logo ?? null,
+    color: competitor.team?.color ?? null,
+  };
+}
 
 // --- Finality mapping — structurally the only path to 'final' --------------
 
@@ -152,64 +290,57 @@ export function toCanonicalStatus(statusType: {
   return null;
 }
 
-function mapEventToScheduleEntry(
-  event: EspnEvent,
+function mapMatchToScheduleEntry(
+  match: EspnCompetition,
   sport: string,
   allowsDraw: boolean,
 ): CanonicalScheduleEntry | null {
-  const competition = event.competitions[0]!;
-  const status = toCanonicalStatus(competition.status.type);
+  const status = toCanonicalStatus(match.status.type);
   if (status === null) {
-    logger.warn({ eventId: event.id, statusName: competition.status.type.name }, "espn: unrecognized status, skipping event");
+    logger.warn({ matchId: match.id, statusName: match.status.type.name }, "espn: unrecognized status, skipping match");
     return null;
   }
 
-  const home = competition.competitors.find((c) => c.homeAway === "home");
-  const away = competition.competitors.find((c) => c.homeAway === "away");
+  const homeC = match.competitors.find((c, i) => sideOf(c, i) === "home");
+  const awayC = match.competitors.find((c, i) => sideOf(c, i) === "away");
+  const home = homeC && participantOf(homeC);
+  const away = awayC && participantOf(awayC);
   if (!home || !away) {
-    logger.warn({ eventId: event.id }, "espn: event missing home/away competitor, skipping");
+    logger.warn({ matchId: match.id }, "espn: match missing home/away participant, skipping");
     return null;
   }
 
   return {
-    externalId: event.id,
+    externalId: match.id,
     sport,
-    startsAt: new Date(event.date),
+    startsAt: new Date(match.date),
     status,
-    homeTeam: {
-      externalId: home.team.id,
-      displayName: home.team.displayName,
-      logoUrl: home.team.logo ?? null,
-      color: home.team.color ?? null,
-    },
-    awayTeam: {
-      externalId: away.team.id,
-      displayName: away.team.displayName,
-      logoUrl: away.team.logo ?? null,
-      color: away.team.color ?? null,
-    },
+    // participantOf() already produced a complete CanonicalTeam
+    // (including logoUrl/color for team sports) — see its comment for
+    // why individual sports leave those null.
+    homeTeam: home,
+    awayTeam: away,
     allowsDraw,
   };
 }
 
-function mapEventToResult(event: EspnEvent): CanonicalResult | null {
-  const competition = event.competitions[0]!;
-  const status = toCanonicalStatus(competition.status.type);
+function mapMatchToResult(match: EspnCompetition): CanonicalResult | null {
+  const status = toCanonicalStatus(match.status.type);
   if (status === null) {
-    logger.warn({ eventId: event.id, statusName: competition.status.type.name }, "espn: unrecognized status, skipping event");
+    logger.warn({ matchId: match.id, statusName: match.status.type.name }, "espn: unrecognized status, skipping match");
     return null;
   }
 
   let winnerSide: CanonicalResult["winnerSide"] = null;
   if (status === "final") {
-    const home = competition.competitors.find((c) => c.homeAway === "home");
-    const away = competition.competitors.find((c) => c.homeAway === "away");
+    const home = match.competitors.find((c, i) => sideOf(c, i) === "home");
+    const away = match.competitors.find((c, i) => sideOf(c, i) === "away");
     if (home?.winner) winnerSide = "home";
     else if (away?.winner) winnerSide = "away";
     else winnerSide = "draw"; // completed, nobody's `winner` is true — a genuine draw
   }
 
-  return { externalId: event.id, status, winnerSide };
+  return { externalId: match.id, status, winnerSide };
 }
 
 // --- In-run circuit breaker -------------------------------------------------
@@ -306,8 +437,10 @@ export class EspnSportsProvider implements SportsProvider {
 
     const entries: CanonicalScheduleEntry[] = [];
     for (const event of events) {
-      const entry = mapEventToScheduleEntry(event, params.sport, slug.allowsDraw);
-      if (entry) entries.push(entry);
+      for (const match of extractMatches(event, slug.matchStyle)) {
+        const entry = mapMatchToScheduleEntry(match, params.sport, slug.allowsDraw);
+        if (entry) entries.push(entry);
+      }
     }
     return entries;
   }
@@ -339,9 +472,11 @@ export class EspnSportsProvider implements SportsProvider {
       const events = await this.fetchScoreboard(slug.espnSport, slug.espnLeague, `${fromDate}-${toDate}`);
 
       for (const event of events) {
-        if (!externalIds.has(event.id)) continue;
-        const result = mapEventToResult(event);
-        if (result) results.push(result);
+        for (const match of extractMatches(event, slug.matchStyle)) {
+          if (!externalIds.has(match.id)) continue;
+          const result = mapMatchToResult(match);
+          if (result) results.push(result);
+        }
       }
     }
     return results;

@@ -55,7 +55,10 @@ export type KnownApiErrorCode =
   | "INVALID_TEAM_SELECTION"
   | "GAME_NOT_FOUND"
   | "RESULT_NOT_FOUND"
-  | "NO_CHANGE";
+  | "NO_CHANGE"
+  | "GOLF_PICK_LOCKED"
+  | "GOLF_TOURNAMENT_CANCELED"
+  | "GOLF_TOURNAMENT_POSTPONED";
 
 /**
  * Thrown by the API client for every non-2xx response and for network-

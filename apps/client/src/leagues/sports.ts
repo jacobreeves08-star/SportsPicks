@@ -10,6 +10,11 @@ export interface SportOption {
  * exists to fetch this from, so this is a deliberate, minimal
  * client-side mirror, not a shared import — the client and server are
  * separate deployables and can't share a module across that boundary.
+ *
+ * "golf" is the one entry NOT in ESPN_SPORT_SLUGS: it doesn't fit the
+ * game/pick adapter at all (a ~69-competitor leaderboard, not a 2-sided
+ * matchup) and runs on its own tournament/golf_pick tables and its own
+ * screen. The server accepts it via its own `isValidSportCode` check.
  */
 export const SPORT_OPTIONS: SportOption[] = [
   { value: "nfl", label: "NFL" },
@@ -17,9 +22,13 @@ export const SPORT_OPTIONS: SportOption[] = [
   { value: "nba", label: "NBA" },
   { value: "ncaamb", label: "NCAA Men's Basketball" },
   { value: "mlb", label: "MLB" },
+  { value: "nhl", label: "NHL" },
   { value: "epl", label: "Premier League" },
   { value: "ucl", label: "Champions League" },
   { value: "mls", label: "MLS" },
+  { value: "tennis", label: "Tennis" },
+  { value: "mma", label: "MMA" },
+  { value: "golf", label: "Golf" },
 ];
 
 /** Falls back to the raw code for anything not in the list above

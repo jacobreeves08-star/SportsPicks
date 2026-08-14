@@ -1,12 +1,16 @@
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "../db/client.js";
-import { pick } from "../db/schema.js";
+import { golfPick, pick } from "../db/schema.js";
 import {
   createTestGame,
+  createTestGolfPick,
+  createTestGolfPickSelection,
   createTestLeague,
   createTestLeagueMember,
   createTestPick,
+  createTestTournament,
+  createTestTournamentEntry,
   createTestUser,
   truncateAllTables,
 } from "../db/test-helpers.js";
@@ -18,6 +22,26 @@ beforeEach(async () => {
 
 async function gradePick(pickId: string, outcome: "win" | "loss" | "void", gradedAt: Date = new Date()): Promise<void> {
   await db.update(pick).set({ outcome, gradedAt }).where(eq(pick.id, pickId));
+}
+
+async function gradeGolfPick(golfPickId: string, outcome: "win" | "loss" | "void", gradedAt: Date = new Date()): Promise<void> {
+  await db.update(golfPick).set({ outcome, gradedAt }).where(eq(golfPick.id, golfPickId));
+}
+
+/** Creates a golf_pick with one selection and grades it in one step —
+ * the selection itself is never read by standings (only outcome/tournament
+ * matter), so a single throwaway entry is enough for these tests. */
+async function seedGradedGolfPick(
+  memberId: string,
+  tournamentId: string,
+  outcome: "win" | "loss" | "void",
+  gradedAt: Date = new Date(),
+) {
+  const gp = await createTestGolfPick(memberId, tournamentId);
+  const entry = await createTestTournamentEntry(tournamentId);
+  await createTestGolfPickSelection(gp.id, entry.id);
+  await gradeGolfPick(gp.id, outcome, gradedAt);
+  return gp;
 }
 
 describe("computeStandings — base wins/losses/winPct/rank (hand-calculated, JAC-37-42)", () => {
@@ -216,5 +240,108 @@ describe("computeStandings — tiebreaker chain (JAC-37-42, confirmed with user:
     const standings = await computeStandings(league.id, "season", "2026-06-01");
     expect(standings[0]!.leagueMemberId).toBe(alice.id); // "Alice" < "Zoe"
     expect(standings[1]!.leagueMemberId).toBe(zoe.id);
+  });
+});
+
+describe("computeStandings — golf integration (JAC-56)", () => {
+  it("merges golf wins/losses into the same member's overall record as game picks", async () => {
+    const owner = await createTestUser();
+    const league = await createTestLeague(owner.id, { timezone: "UTC", seasonStart: "2026-01-01" });
+    const member = await createTestLeagueMember(owner.id, league.id, { role: "commissioner" });
+
+    const game = await createTestGame({ startsAt: new Date("2026-01-10T18:00:00Z") });
+    await gradePick((await createTestPick(member.id, game.id)).id, "win");
+
+    const tournament = await createTestTournament({
+      startsAt: new Date("2026-01-10T13:00:00Z"),
+      endsAt: new Date("2026-01-13T22:00:00Z"),
+    });
+    await seedGradedGolfPick(member.id, tournament.id, "win");
+
+    const standings = await computeStandings(league.id, "season", "2026-06-01");
+    expect(standings[0]).toMatchObject({ wins: 2, losses: 0, gamesParticipated: 2, winPct: 1 });
+  });
+
+  it("credits a golf pick's outcome on the day the tournament ENDS, not the day it starts", async () => {
+    const owner = await createTestUser();
+    const league = await createTestLeague(owner.id, { timezone: "UTC" });
+    const member = await createTestLeagueMember(owner.id, league.id, { role: "commissioner" });
+
+    // Starts Jan 9 (outside the Jan-10 'today' window), ends Jan 10
+    // (inside it) — a real multi-day tournament spanning a day boundary.
+    const tournament = await createTestTournament({
+      startsAt: new Date("2026-01-09T13:00:00Z"),
+      endsAt: new Date("2026-01-10T12:00:00Z"),
+    });
+    await seedGradedGolfPick(member.id, tournament.id, "win");
+
+    const onEndDay = await computeStandings(league.id, "today", "2026-01-10");
+    expect(onEndDay[0]).toMatchObject({ wins: 1, gamesParticipated: 1 });
+
+    const onStartDay = await computeStandings(league.id, "today", "2026-01-09");
+    expect(onStartDay[0]).toMatchObject({ wins: 0, gamesParticipated: 0 });
+  });
+
+  it("excludes voided golf picks from wins/losses/gamesParticipated entirely", async () => {
+    const owner = await createTestUser();
+    const league = await createTestLeague(owner.id, { seasonStart: "2026-01-01" });
+    const member = await createTestLeagueMember(owner.id, league.id, { role: "commissioner" });
+
+    const tournament = await createTestTournament({
+      startsAt: new Date("2026-01-10T13:00:00Z"),
+      endsAt: new Date("2026-01-13T22:00:00Z"),
+    });
+    await seedGradedGolfPick(member.id, tournament.id, "void");
+
+    const standings = await computeStandings(league.id, "season", "2026-06-01");
+    expect(standings[0]).toMatchObject({ wins: 0, losses: 0, gamesParticipated: 0 });
+  });
+
+  it("an ungraded golf pick (tournament hasn't started/finished yet) contributes nothing", async () => {
+    const owner = await createTestUser();
+    const league = await createTestLeague(owner.id, { seasonStart: "2026-01-01" });
+    const member = await createTestLeagueMember(owner.id, league.id, { role: "commissioner" });
+
+    const tournament = await createTestTournament({
+      startsAt: new Date("2026-01-10T13:00:00Z"),
+      endsAt: new Date("2026-01-13T22:00:00Z"),
+    });
+    const gp = await createTestGolfPick(member.id, tournament.id);
+    const entry = await createTestTournamentEntry(tournament.id);
+    await createTestGolfPickSelection(gp.id, entry.id);
+    // Never graded — outcome stays null.
+
+    const standings = await computeStandings(league.id, "season", "2026-06-01");
+    expect(standings[0]).toMatchObject({ wins: 0, losses: 0, gamesParticipated: 0 });
+  });
+
+  it("resolves a win%-tie via head-to-head on a commonly-picked TOURNAMENT, same mechanism as a commonly-picked game", async () => {
+    const owner = await createTestUser({ displayName: "A-Member" });
+    const league = await createTestLeague(owner.id);
+    const memberA = await createTestLeagueMember(owner.id, league.id, { role: "commissioner" });
+    const userB = await createTestUser({ displayName: "B-Member" });
+    const memberB = await createTestLeagueMember(userB.id, league.id);
+
+    const tournament = await createTestTournament({
+      startsAt: new Date("2026-01-10T13:00:00Z"),
+      endsAt: new Date("2026-01-13T22:00:00Z"),
+    });
+
+    // Both members pick the SAME tournament: A wins it, B loses it. Each
+    // also picks its OWN (not commonly-picked) game with the opposite
+    // outcome, so both land at exactly 1W-1L — a genuine overall tie
+    // that only the shared tournament can break.
+    const gA = await createTestGame({ startsAt: new Date("2026-01-10T18:00:00Z") });
+    const gB = await createTestGame({ startsAt: new Date("2026-01-10T18:00:00Z") });
+    await gradePick((await createTestPick(memberA.id, gA.id)).id, "loss");
+    await gradePick((await createTestPick(memberB.id, gB.id)).id, "win");
+    await seedGradedGolfPick(memberA.id, tournament.id, "win");
+    await seedGradedGolfPick(memberB.id, tournament.id, "loss");
+
+    const standings = await computeStandings(league.id, "season", "2026-06-01");
+    expect(standings[0]!.winPct).toBeCloseTo(standings[1]!.winPct, 10); // tied overall (1-1 each)
+    // A won the commonly-picked tournament, B lost it -> A ranks first.
+    expect(standings[0]!.leagueMemberId).toBe(memberA.id);
+    expect(standings[1]!.leagueMemberId).toBe(memberB.id);
   });
 });

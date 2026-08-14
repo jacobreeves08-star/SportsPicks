@@ -187,7 +187,7 @@ export async function runScheduleIngest(providerOverride?: SportsProvider): Prom
     }
 
     if (itemCount === 0) {
-      captureMessage("schedule-ingest: zero games found across all 8 tracked sports in one run", {
+      captureMessage("schedule-ingest: zero games found across all 11 tracked sports in one run", {
         fromDate,
         toDate,
       });

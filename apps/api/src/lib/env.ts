@@ -132,6 +132,11 @@ const envSchema = z.object({
   // operator tool, not a user-facing feature.
   OPERATOR_EMAIL: optionalString(),
   OPERATOR_DIGEST_HEARTBEAT_URL: optionalUrl(),
+
+  // Golf (JAC-56) — separate from every other heartbeat on purpose,
+  // same reasoning as SCHEDULE_INGEST_HEARTBEAT_URL: golf-ingest runs
+  // on its own schedule, distinct from every other job's.
+  GOLF_INGEST_HEARTBEAT_URL: optionalUrl(),
 });
 
 export type Env = z.infer<typeof envSchema>;

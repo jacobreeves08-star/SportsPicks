@@ -1,0 +1,24 @@
+{
+  "id": "401811962",
+  "name": "FedEx St. Jude Championship",
+  "date": "2026-08-13T04:00Z",
+  "endDate": "2026-08-16T04:00Z",
+  "status": {
+    "type": {
+      "id": "2",
+      "name": "STATUS_IN_PROGRESS",
+      "state": "in",
+      "completed": false,
+      "description": "In Progress"
+    }
+  },
+  "competitions": [
+    {
+      "competitors": [
+        { "id": "9478", "order": 1, "athlete": { "displayName": "Scottie Scheffler" } },
+        { "id": "11382", "order": 2, "athlete": { "displayName": "Sungjae Im" } },
+        { "id": "4375972", "order": 3, "athlete": { "displayName": "Ludvig Åberg" } }
+      ]
+    }
+  ]
+}

@@ -12,6 +12,7 @@ import { TimezoneSelect } from "../TimezoneSelect.js";
 import { presentApiError } from "../present-api-error.js";
 import formStyles from "../StandaloneForm.module.css";
 import styles from "./CreateLeagueScreen.module.css";
+import { GolfSettingsFields } from "./GolfSettingsFields.js";
 import { PickHorizonSelect } from "./PickHorizonSelect.js";
 
 /**
@@ -27,11 +28,22 @@ export function CreateLeagueScreen() {
   const [seasonStart, setSeasonStart] = useState("");
   const [timezoneOverride, setTimezoneOverride] = useState<string | null>(null);
   const [pickHorizonDays, setPickHorizonDays] = useState(7);
+  const [golfPickCount, setGolfPickCount] = useState(3);
+  const [golfTopN, setGolfTopN] = useState(10);
   const [clientErrors, setClientErrors] = useState<Record<string, string>>({});
 
   const mutation = useMutation({
     mutationFn: () =>
-      createLeague({ name, sports, timezone: timezoneOverride ?? me!.timezone, seasonStart, pickHorizonDays }),
+      createLeague({
+        name,
+        sports,
+        timezone: timezoneOverride ?? me!.timezone,
+        seasonStart,
+        pickHorizonDays,
+        // Only sent for a league that actually covers golf — otherwise
+        // the server's own defaults apply and these two are inert.
+        ...(sports.includes("golf") && { golfPickCount, golfTopN }),
+      }),
     onSuccess: (created) => {
       setCurrentLeagueId(created.id);
     },
@@ -159,6 +171,16 @@ export function CreateLeagueScreen() {
               hint="How far ahead members can pick a game. You can change this later."
               error={fieldErrors.pickHorizonDays}
             />
+
+            {sports.includes("golf") ? (
+              <GolfSettingsFields
+                golfPickCount={golfPickCount}
+                golfTopN={golfTopN}
+                onPickCountChange={setGolfPickCount}
+                onTopNChange={setGolfTopN}
+                errors={fieldErrors}
+              />
+            ) : null}
 
             <button
               type="submit"

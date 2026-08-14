@@ -98,6 +98,8 @@ Per active league membership: `record` (`wins`/`losses`), `gamesParticipated` (`
 
 **Still deliberately out of scope**: nothing beyond the two checks above. The horizon is a rolling window from "now," not calendar-day-aligned to the league's timezone (unlike the slate/day-bounds logic elsewhere in this app) — matching `PICK_LOCKED`'s own "as of this instant" framing, not a day-boundary concept the league's timezone would meaningfully change.
 
+**Golf settings** (`league.golf_pick_count`, default 3, checked 1–10; `league.golf_top_n`, default 10, checked 1–50): how many golfers a member picks per tournament, and how far down the leaderboard still counts as a correct pick. Commissioner-configurable via the same `PATCH /:leagueId`, same authorization. Only meaningful for a league whose `sports` includes `"golf"` — the client hides both fields otherwise, and they're inert for every other league. **`"golf"` is a valid `sports` value even though it is NOT in `ESPN_SPORT_SLUGS`** (see `leagues.routes.ts`'s `isValidSportCode`): golf doesn't fit the game/pick adapter at all and runs on its own `tournament`/`golf_pick` tables. Every query here that joins `sports` against `game` (`unpickedCount`, the home screen's records) is naturally a no-op for golf, since no `game` row ever carries that sport — golf's contribution to a member's record comes from `lib/standings.ts`'s parallel golf query instead. See `docs/sports-pipeline.md`.
+
 ## Limits
 
 | Limit | Env var | Default |

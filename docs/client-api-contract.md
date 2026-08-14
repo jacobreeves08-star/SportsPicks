@@ -49,10 +49,10 @@ Base path prefixes: `/auth`, `/users`, `/leagues` (three route files share this 
 
 | Method & path | Body | Response |
 |---|---|---|
-| `POST /leagues` | `{ name, sports: string[], timezone?, seasonStart: "YYYY-MM-DD" }` | `201`, the created league + `memberCount: 1` + `inviteCode` (the raw code string). |
+| `POST /leagues` | `{ name, sports: string[], timezone?, seasonStart: "YYYY-MM-DD", pickHorizonDays?, golfPickCount?, golfTopN? }` | `201`, the created league + `memberCount: 1` + `inviteCode` (the raw code string). `golfPickCount` (1–10, default 3) and `golfTopN` (1–50, default 10) only matter when `sports` includes `"golf"`. |
 | `GET /leagues` | — | **Array** (not the paginated envelope) — the multi-league home screen. Each item: `{ id, name, sports, memberCount, record: { wins, losses }, gamesParticipated, rank, unpickedCount, nextLockAt }`, pre-sorted (leagues with something open first, soonest lock first; settled leagues trail, alphabetical). |
 | `GET /leagues/:leagueId` | — | `{ ...league row, memberCount }`. |
-| `PATCH /leagues/:leagueId` | `{ name?, sports? }` | Updated league. `409 SPORTS_SELECTION_FROZEN` if `sports` changes after the league has any graded game. Commissioner-only. |
+| `PATCH /leagues/:leagueId` | `{ name?, sports?, pickHorizonDays?, golfPickCount?, golfTopN? }` | Updated league. `409 SPORTS_SELECTION_FROZEN` if `sports` changes after the league has any graded game. Commissioner-only. |
 | `DELETE /leagues/:leagueId` | — | `204`. Commissioner-only, hard-deletes the league and its picks. |
 | `POST /leagues/:leagueId/transfer-commissioner` | `{ newCommissionerMemberId }` | `{ message }`. Commissioner-only. |
 | `POST /leagues/:leagueId/leave` | — | `{ message }`. `409 COMMISSIONER_MUST_TRANSFER_FIRST` / `409 SOLE_MEMBER_USE_DELETE` if the caller is the commissioner. |
@@ -71,6 +71,19 @@ Base path prefixes: `/auth`, `/users`, `/leagues` (three route files share this 
 | `POST /leagues/:leagueId/members/:memberId/picks/batch` | `{ picks: [{ gameId, selectedTeam }] }` (max 50) | `{ results: [{ gameId, status: "accepted"\|"rejected", pick?: { selectedTeam }, error?: { code, message } }] }` — **200 even when every item was rejected.** Never throws for an individual game's rejection; a client must inspect `results[].status` per item, not the HTTP status code. |
 
 **Pick-write rejection reasons** (thrown as the single-pick route's error, or embedded per-item in the batch route): `PICK_LOCKED` (409 — the one to design UI around), `GAME_CANCELED` (409), `GAME_POSTPONED` (409), `INVALID_TEAM_SELECTION` (400), and a `VALIDATION_ERROR` (400) fallback for a nonexistent game or one whose sport isn't part of the league.
+
+### Golf (`/leagues`, auth required — JAC-56)
+
+Golf is **not** part of the slate/pick endpoints above and does not use `PickControl` — a tournament is one ~69-competitor leaderboard, not a 2-sided matchup. See `docs/sports-pipeline.md`'s Golf section for the full mechanic.
+
+| Method & path | Body | Response |
+|---|---|---|
+| `GET /leagues/:leagueId/golf/current` | — | The one current tournament (no date param — golf has at most one in flight, resolved server-side): `{ tournament: { id, name, startsAt, endsAt, status, locked } \| null, leaderboard: [{ externalId, golferName, position }], myPick: string[] \| null, otherPicks: [{ leagueMemberId, displayName, hasPicked, golferExternalIds }], golfPickCount, golfTopN }`. Prefers an in-progress/upcoming tournament, falling back to the most recently concluded one so results stay visible. `tournament: null` when none exists at all. |
+| `PUT /leagues/:leagueId/members/:memberId/golf-pick/:tournamentId` | `{ golferExternalIds: string[] }` | The written pick: `{ id, leagueMemberId, tournamentId, golferExternalIds }`. A **full replace** of the member's selections, not an incremental add — must be exactly `golfPickCount` golfers. Shares the pick-write rate limiter with the game-pick routes. |
+
+`leaderboard[].position` is `null` until the provider posts a rank (pre-tournament, or a golfer who hasn't teed off) — never render null as a finishing position. `otherPicks[].golferExternalIds` is `null` until the tournament locks, the same privacy rule as the slate's `otherPicks[].selectedTeam`; `hasPicked` is always visible.
+
+**Golf-pick rejection reasons**: `GOLF_PICK_LOCKED` (409 — the tournament has started), `GOLF_TOURNAMENT_CANCELED` (409), `GOLF_TOURNAMENT_POSTPONED` (409), and `VALIDATION_ERROR` (400) for a wrong selection count, a duplicate golfer within one pick, a golfer not in the field, an unknown tournament, or a league that doesn't cover golf.
 
 ### Slate (`/leagues`, auth required, own rate limit, server-cached 20s per `(leagueId, date, viewerMemberId)`)
 

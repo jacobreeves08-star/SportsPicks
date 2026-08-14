@@ -2,12 +2,26 @@ import type { FastifyInstance } from "fastify";
 import rateLimit from "@fastify/rate-limit";
 import { and, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 import { db } from "../db/client.js";
-import { game, league, leagueMember, leagueMemberReport, leagueInviteCode, pick, pickAuditLog, user } from "../db/schema.js";
+import {
+  game,
+  golfPick,
+  golfPickSelection,
+  league,
+  leagueMember,
+  leagueMemberReport,
+  leagueInviteCode,
+  pick,
+  pickAuditLog,
+  tournament,
+  tournamentEntry,
+  user,
+} from "../db/schema.js";
 import { authenticate } from "../plugins/authenticate.js";
 import { logEvent } from "../lib/analytics.js";
 import { containsDisallowedContent } from "../lib/content-filter.js";
 import { captureException } from "../lib/error-tracking.js";
 import { env } from "../lib/env.js";
+import { rejectionToApiError as golfRejectionToApiError, writeGolfPick } from "../lib/golf-pick-write.js";
 import { ApiError } from "../lib/http-errors.js";
 import { logger } from "../lib/logger.js";
 import { generateInviteCode, isUniqueConstraintViolation } from "../lib/invite-code.js";
@@ -18,6 +32,17 @@ import { getCachedSlate, setCachedSlate } from "../lib/slate-cache.js";
 import { ESPN_SPORT_SLUGS } from "../lib/sports-provider.js";
 import { dayBoundsUtc, isValidIanaTimeZone, nowUtc } from "../lib/time.js";
 import { DateTime } from "luxon";
+
+// "golf" is deliberately NOT in ESPN_SPORT_SLUGS (see sports-provider.ts —
+// it doesn't fit the game/pick adapter shape at all), but it's still a
+// real sport a league can opt into via this same `sports` array, using
+// its own tournament/golf_pick tables instead of game/pick. Every query
+// that joins `sports` against the `game` table (unpickedCount, the home
+// screen) is naturally a no-op for "golf" since no game row ever has
+// that sport, so no other change was needed to let it coexist here.
+function isValidSportCode(sport: string): boolean {
+  return sport in ESPN_SPORT_SLUGS || sport === "golf";
+}
 
 interface SlateResponse {
   date: string;
@@ -164,21 +189,25 @@ export async function leaguesRoutes(app: FastifyInstance): Promise<void> {
             timezone: { type: "string", minLength: 1 },
             seasonStart: { type: "string", format: "date" },
             pickHorizonDays: { type: "integer", minimum: 1, maximum: 30 },
+            golfPickCount: { type: "integer", minimum: 1, maximum: 10 },
+            golfTopN: { type: "integer", minimum: 1, maximum: 50 },
           },
         },
       },
     },
     async (request, reply) => {
-      const { name, sports, timezone, seasonStart, pickHorizonDays } = request.body as {
+      const { name, sports, timezone, seasonStart, pickHorizonDays, golfPickCount, golfTopN } = request.body as {
         name: string;
         sports: string[];
         timezone?: string;
         seasonStart: string;
         pickHorizonDays?: number;
+        golfPickCount?: number;
+        golfTopN?: number;
       };
       const userId = request.user!.id;
 
-      const invalidSport = sports.find((s) => !(s in ESPN_SPORT_SLUGS));
+      const invalidSport = sports.find((s) => !isValidSportCode(s));
       if (invalidSport) {
         throw new ApiError("VALIDATION_ERROR", "Request failed validation", 400, [
           { field: "sports", message: `unknown sport code: ${invalidSport}` },
@@ -219,6 +248,8 @@ export async function leaguesRoutes(app: FastifyInstance): Promise<void> {
             timezone: resolvedTimezone!,
             seasonStart,
             ...(pickHorizonDays !== undefined && { pickHorizonDays }),
+            ...(golfPickCount !== undefined && { golfPickCount }),
+            ...(golfTopN !== undefined && { golfTopN }),
           })
           .returning();
         await tx.insert(leagueMember).values({ userId, leagueId: createdLeague!.id, role: "commissioner" });
@@ -610,6 +641,70 @@ export async function leaguesRoutes(app: FastifyInstance): Promise<void> {
         return { results };
       },
     );
+
+    /**
+     * Golf's write endpoint (JAC-56) — same rate-limit registration as
+     * the game pick routes above (one member hammering writes is one
+     * member hammering writes, regardless of sport). Unlike a game
+     * pick, this is a full replace of the member's golfer selections
+     * for the tournament, not a single scalar — see
+     * lib/golf-pick-write.ts's own doc comment for why that's safe.
+     */
+    instance.put(
+      "/:leagueId/members/:memberId/golf-pick/:tournamentId",
+      {
+        schema: {
+          params: {
+            type: "object",
+            required: ["leagueId", "memberId", "tournamentId"],
+            properties: {
+              leagueId: { type: "string" },
+              memberId: { type: "string" },
+              tournamentId: { type: "string" },
+            },
+          },
+          body: {
+            type: "object",
+            required: ["golferExternalIds"],
+            properties: {
+              golferExternalIds: { type: "array", items: { type: "string" }, minItems: 1, maxItems: 10 },
+            },
+          },
+        },
+      },
+      async (request) => {
+        const { leagueId, memberId, tournamentId } = request.params as {
+          leagueId: string;
+          memberId: string;
+          tournamentId: string;
+        };
+        const { golferExternalIds } = request.body as { golferExternalIds: string[] };
+
+        await requireOwnMembership(request.user!.id, leagueId, memberId);
+
+        const [leagueRow] = await db
+          .select({ sports: league.sports, golfPickCount: league.golfPickCount })
+          .from(league)
+          .where(eq(league.id, leagueId))
+          .limit(1);
+
+        const result = await writeGolfPick(db, {
+          leagueId,
+          leagueMemberId: memberId,
+          tournamentId,
+          golferExternalIds,
+          leagueSports: leagueRow!.sports,
+          golfPickCount: leagueRow!.golfPickCount,
+        });
+
+        if (!result.accepted) {
+          const field = result.reason === "TOURNAMENT_NOT_FOUND" ? "tournamentId" : "golferExternalIds";
+          throw golfRejectionToApiError(result.reason, result.message, field);
+        }
+
+        return result.pick;
+      },
+    );
   });
 
   /**
@@ -785,6 +880,130 @@ export async function leaguesRoutes(app: FastifyInstance): Promise<void> {
     );
   });
 
+  /**
+   * Golf's read endpoint (JAC-56) — "the one tournament to show right
+   * now," not a date-scoped list like the slate: golf has at most one
+   * relevant PGA event in flight at a time (see lib/golf-provider.ts),
+   * so there's no per-day windowing concept to replicate here. Prefers
+   * an in-progress/upcoming tournament; falls back to the most
+   * recently concluded one so results stay visible after it ends.
+   *
+   * Same privacy shape as the slate: every other member's hasPicked is
+   * always visible, but their actual golferExternalIds are only
+   * revealed once the tournament has locked (started) — never before.
+   * Not rate-limited beyond the general account-wide limit (unlike
+   * slate reads) — this is a single-row-ish query, not something a
+   * client polls on the same cadence as a live scoreboard.
+   */
+  app.get(
+    "/:leagueId/golf/current",
+    { schema: { params: { type: "object", required: ["leagueId"], properties: { leagueId: { type: "string" } } } } },
+    async (request) => {
+      const { leagueId } = request.params as { leagueId: string };
+      const member = await requireLeagueMembership(request.user!.id, leagueId);
+
+      const [leagueRow] = await db
+        .select({ golfPickCount: league.golfPickCount, golfTopN: league.golfTopN })
+        .from(league)
+        .where(eq(league.id, leagueId))
+        .limit(1);
+
+      const [upcoming] = await db
+        .select()
+        .from(tournament)
+        .where(inArray(tournament.status, ["scheduled", "in_progress"]))
+        .orderBy(tournament.startsAt)
+        .limit(1);
+      const tournamentRow =
+        upcoming ??
+        (await db.select().from(tournament).orderBy(sql`${tournament.endsAt} desc`).limit(1))[0];
+
+      if (!tournamentRow) {
+        return {
+          tournament: null,
+          leaderboard: [],
+          myPick: null,
+          otherPicks: [],
+          golfPickCount: leagueRow!.golfPickCount,
+          golfTopN: leagueRow!.golfTopN,
+        };
+      }
+
+      const locked = nowUtc().toJSDate() >= tournamentRow.startsAt;
+
+      const entries = await db
+        .select({ externalId: tournamentEntry.externalId, golferName: tournamentEntry.golferName, position: tournamentEntry.position })
+        .from(tournamentEntry)
+        .where(eq(tournamentEntry.tournamentId, tournamentRow.id))
+        .orderBy(sql`${tournamentEntry.position} is null, ${tournamentEntry.position} asc`);
+
+      // NOTE: db.execute()'s raw path returns json_agg results already
+      // parsed (not a Postgres text representation, unlike timestamptz —
+      // confirmed against the slate endpoint's own equivalent query),
+      // so golfer_external_ids needs no conversion here.
+      const otherPicksResult = await db.execute<{
+        league_member_id: string;
+        display_name: string;
+        has_picked: boolean;
+        golfer_external_ids: string[] | null;
+      }>(sql`
+        select
+          lm.id as league_member_id,
+          u.display_name,
+          (gp.id is not null) as has_picked,
+          case when ${locked} and gp.id is not null then
+            coalesce(
+              (select json_agg(te.external_id) from golf_pick_selection gps
+                join tournament_entry te on te.id = gps.tournament_entry_id
+                where gps.golf_pick_id = gp.id),
+              '[]'
+            )
+          else null end as golfer_external_ids
+        from league_member lm
+        join "user" u on u.id = lm.user_id
+        left join golf_pick gp on gp.league_member_id = lm.id and gp.tournament_id = ${tournamentRow.id}
+        where lm.league_id = ${leagueId} and lm.left_at is null and lm.id != ${member.id}
+      `);
+
+      const [myGolfPick] = await db
+        .select({ id: golfPick.id })
+        .from(golfPick)
+        .where(and(eq(golfPick.leagueMemberId, member.id), eq(golfPick.tournamentId, tournamentRow.id)))
+        .limit(1);
+
+      let myPick: string[] | null = null;
+      if (myGolfPick) {
+        const mySelections = await db
+          .select({ externalId: tournamentEntry.externalId })
+          .from(golfPickSelection)
+          .innerJoin(tournamentEntry, eq(tournamentEntry.id, golfPickSelection.tournamentEntryId))
+          .where(eq(golfPickSelection.golfPickId, myGolfPick.id));
+        myPick = mySelections.map((s) => s.externalId);
+      }
+
+      return {
+        tournament: {
+          id: tournamentRow.id,
+          name: tournamentRow.name,
+          startsAt: tournamentRow.startsAt,
+          endsAt: tournamentRow.endsAt,
+          status: tournamentRow.status,
+          locked,
+        },
+        leaderboard: entries,
+        myPick,
+        otherPicks: otherPicksResult.rows.map((r) => ({
+          leagueMemberId: r.league_member_id,
+          displayName: r.display_name,
+          hasPicked: r.has_picked,
+          golferExternalIds: r.golfer_external_ids,
+        })),
+        golfPickCount: leagueRow!.golfPickCount,
+        golfTopN: leagueRow!.golfTopN,
+      };
+    },
+  );
+
   app.patch(
     "/:leagueId",
     {
@@ -796,16 +1015,20 @@ export async function leaguesRoutes(app: FastifyInstance): Promise<void> {
             name: { type: "string", minLength: 1 },
             sports: { type: "array", items: { type: "string" }, minItems: 1 },
             pickHorizonDays: { type: "integer", minimum: 1, maximum: 30 },
+            golfPickCount: { type: "integer", minimum: 1, maximum: 10 },
+            golfTopN: { type: "integer", minimum: 1, maximum: 50 },
           },
         },
       },
     },
     async (request) => {
       const { leagueId } = request.params as { leagueId: string };
-      const { name, sports, pickHorizonDays } = request.body as {
+      const { name, sports, pickHorizonDays, golfPickCount, golfTopN } = request.body as {
         name?: string;
         sports?: string[];
         pickHorizonDays?: number;
+        golfPickCount?: number;
+        golfTopN?: number;
       };
 
       await requireLeagueCommissioner(request.user!.id, leagueId);
@@ -824,7 +1047,7 @@ export async function leaguesRoutes(app: FastifyInstance): Promise<void> {
       }
 
       if (sports !== undefined && JSON.stringify([...sports].sort()) !== JSON.stringify([...current!.sports].sort())) {
-        const invalidSport = sports.find((s) => !(s in ESPN_SPORT_SLUGS));
+        const invalidSport = sports.find((s) => !isValidSportCode(s));
         if (invalidSport) {
           throw new ApiError("VALIDATION_ERROR", "Request failed validation", 400, [
             { field: "sports", message: `unknown sport code: ${invalidSport}` },
@@ -842,6 +1065,12 @@ export async function leaguesRoutes(app: FastifyInstance): Promise<void> {
 
       if (pickHorizonDays !== undefined) {
         updates.pickHorizonDays = pickHorizonDays;
+      }
+      if (golfPickCount !== undefined) {
+        updates.golfPickCount = golfPickCount;
+      }
+      if (golfTopN !== undefined) {
+        updates.golfTopN = golfTopN;
       }
 
       const [updated] = await db.update(league).set(updates).where(eq(league.id, leagueId)).returning();

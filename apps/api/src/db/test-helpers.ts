@@ -2,6 +2,8 @@ import { db } from "./client.js";
 import {
   analyticsEvent,
   game,
+  golfPick,
+  golfPickSelection,
   jobRun,
   league,
   leagueInviteCode,
@@ -12,6 +14,8 @@ import {
   pickAuditLog,
   pushToken,
   resultCorrection,
+  tournament,
+  tournamentEntry,
   user,
 } from "./schema.js";
 
@@ -34,7 +38,7 @@ function firstOrThrow<T>(rows: T[]): T {
  */
 export async function truncateAllTables(): Promise<void> {
   await db.execute(
-    `truncate table "user", league, league_member, league_invite_code, league_member_report, game, pick, pick_audit_log, result, result_correction, session, verification_token, job_run, push_token, notification_log, analytics_event restart identity cascade`,
+    `truncate table "user", league, league_member, league_invite_code, league_member_report, game, pick, pick_audit_log, result, result_correction, session, verification_token, job_run, push_token, notification_log, analytics_event, tournament, tournament_entry, golf_pick, golf_pick_selection restart identity cascade`,
   );
 }
 
@@ -191,6 +195,63 @@ export async function createTestAnalyticsEvent(overrides: Partial<typeof analyti
   const rows = await db
     .insert(analyticsEvent)
     .values({ eventType: "user_signed_up", ...overrides })
+    .returning();
+  return firstOrThrow(rows);
+}
+
+export async function createTestTournament(overrides: Partial<typeof tournament.$inferInsert> = {}) {
+  const now = new Date();
+  const rows = await db
+    .insert(tournament)
+    .values({
+      name: "Test Open",
+      startsAt: now,
+      endsAt: new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000),
+      ...overrides,
+    })
+    .returning();
+  return firstOrThrow(rows);
+}
+
+let tournamentEntryCounter = 0;
+
+export async function createTestTournamentEntry(
+  tournamentId: string,
+  overrides: Partial<typeof tournamentEntry.$inferInsert> = {},
+) {
+  tournamentEntryCounter += 1;
+  const rows = await db
+    .insert(tournamentEntry)
+    .values({
+      tournamentId,
+      externalId: `test-golfer-${tournamentEntryCounter}`,
+      golferName: `Test Golfer ${tournamentEntryCounter}`,
+      ...overrides,
+    })
+    .returning();
+  return firstOrThrow(rows);
+}
+
+export async function createTestGolfPick(
+  leagueMemberId: string,
+  tournamentId: string,
+  overrides: Partial<typeof golfPick.$inferInsert> = {},
+) {
+  const rows = await db
+    .insert(golfPick)
+    .values({ leagueMemberId, tournamentId, ...overrides })
+    .returning();
+  return firstOrThrow(rows);
+}
+
+export async function createTestGolfPickSelection(
+  golfPickId: string,
+  tournamentEntryId: string,
+  overrides: Partial<typeof golfPickSelection.$inferInsert> = {},
+) {
+  const rows = await db
+    .insert(golfPickSelection)
+    .values({ golfPickId, tournamentEntryId, ...overrides })
     .returning();
   return firstOrThrow(rows);
 }

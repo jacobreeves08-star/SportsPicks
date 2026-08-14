@@ -77,14 +77,33 @@ describe("toCanonicalStatus", () => {
 });
 
 describe("ESPN_SPORT_SLUGS", () => {
-  it("covers all 8 sports in scope with the correct draw eligibility", () => {
+  it("covers all 11 sports in scope with the correct draw eligibility", () => {
     expect(Object.keys(ESPN_SPORT_SLUGS).sort()).toEqual(
-      ["epl", "mlb", "nba", "ncaamb", "ncaaf", "nfl", "mls", "ucl"].sort(),
+      ["epl", "mlb", "mma", "nba", "ncaamb", "ncaaf", "nfl", "nhl", "mls", "tennis", "ucl"].sort(),
     );
     expect(ESPN_SPORT_SLUGS.nfl!.allowsDraw).toBe(false);
+    expect(ESPN_SPORT_SLUGS.nhl!.allowsDraw).toBe(false);
+    expect(ESPN_SPORT_SLUGS.tennis!.allowsDraw).toBe(false);
+    expect(ESPN_SPORT_SLUGS.mma!.allowsDraw).toBe(false);
     expect(ESPN_SPORT_SLUGS.epl!.allowsDraw).toBe(true);
     expect(ESPN_SPORT_SLUGS.ucl!.allowsDraw).toBe(true);
     expect(ESPN_SPORT_SLUGS.mls!.allowsDraw).toBe(true);
+  });
+
+  it("uses the expected ESPN sport/league slug and matchStyle per sport", () => {
+    expect(ESPN_SPORT_SLUGS.tennis).toEqual({
+      espnSport: "tennis",
+      espnLeague: "atp",
+      allowsDraw: false,
+      matchStyle: "individual-grouped",
+    });
+    expect(ESPN_SPORT_SLUGS.mma).toEqual({
+      espnSport: "mma",
+      espnLeague: "ufc",
+      allowsDraw: false,
+      matchStyle: "individual-flat",
+    });
+    expect(ESPN_SPORT_SLUGS.nfl!.matchStyle).toBe("team");
   });
 });
 
@@ -197,6 +216,65 @@ describe("EspnSportsProvider.fetchResults", () => {
     const provider = newProvider();
     const [result] = await provider.fetchResults([{ externalId: "999000004", sport: "nfl", date: "20260917" }]);
     expect(result?.status).toBe("in_progress");
+    expect(result?.winnerSide).toBeNull();
+  });
+});
+
+describe("EspnSportsProvider.fetchSchedule — individual sports (tennis, MMA)", () => {
+  it("flattens a tennis tournament's Men's Singles matches, using the MATCH's own id/date, and excludes doubles", async () => {
+    stubFetchOnce([loadFixtureEvent("tennis-tournament")]);
+    const provider = newProvider();
+    const entries = await provider.fetchSchedule({ sport: "tennis", fromDate: "20260811", toDate: "20260811" });
+
+    expect(entries).toHaveLength(1); // the one singles match — the doubles match is excluded
+    expect(entries[0]).toMatchObject({
+      externalId: "184414", // the MATCH's id, not the tournament event's id ("718-2026")
+      sport: "tennis",
+      status: "scheduled",
+      homeTeam: { externalId: "4030", displayName: "Dane Sweeny" },
+      awayTeam: { externalId: "4444", displayName: "Christopher O'Connell" },
+      allowsDraw: false,
+    });
+    expect(entries[0]!.startsAt.toISOString()).toBe("2026-08-11T16:05:00.000Z"); // the match's own date, not the tournament's
+  });
+
+  it("flattens every fight on an MMA card into its own entry, using each fight's own id/date, home/away synthesized from order", async () => {
+    stubFetchOnce([loadFixtureEvent("mma-card")]);
+    const provider = newProvider();
+    const entries = await provider.fetchSchedule({ sport: "mma", fromDate: "20260815", toDate: "20260815" });
+
+    expect(entries).toHaveLength(2); // both fights on the card, not just the card itself
+    expect(entries[0]).toMatchObject({
+      externalId: "401886760",
+      status: "final",
+      homeTeam: { externalId: "3001914", displayName: "Jeremiah Wells" }, // order:1
+      awayTeam: { externalId: "4297311", displayName: "Themba Gorimbo" }, // order:2
+    });
+    expect(entries[1]).toMatchObject({
+      externalId: "401886763",
+      status: "scheduled",
+      homeTeam: { externalId: "3970873", displayName: "Islam Makhachev" },
+      awayTeam: { externalId: "4685438", displayName: "Jack Della Maddalena" },
+    });
+    // Each fight keeps its OWN start time, not the card's shared event.date.
+    expect(entries[0]!.startsAt.toISOString()).toBe("2026-08-15T21:05:00.000Z");
+    expect(entries[1]!.startsAt.toISOString()).toBe("2026-08-15T23:30:00.000Z");
+  });
+});
+
+describe("EspnSportsProvider.fetchResults — individual sports (tennis, MMA)", () => {
+  it("resolves an MMA fight's winner via order-synthesized home/away, matching on the fight's own id", async () => {
+    stubFetchOnce([loadFixtureEvent("mma-card")]);
+    const provider = newProvider();
+    const [result] = await provider.fetchResults([{ externalId: "401886760", sport: "mma", date: "20260815" }]);
+    expect(result).toEqual({ externalId: "401886760", status: "final", winnerSide: "home" }); // Wells (order:1) won
+  });
+
+  it("a still-scheduled tennis match has no winnerSide", async () => {
+    stubFetchOnce([loadFixtureEvent("tennis-tournament")]);
+    const provider = newProvider();
+    const [result] = await provider.fetchResults([{ externalId: "184414", sport: "tennis", date: "20260811" }]);
+    expect(result?.status).toBe("scheduled");
     expect(result?.winnerSide).toBeNull();
   });
 });

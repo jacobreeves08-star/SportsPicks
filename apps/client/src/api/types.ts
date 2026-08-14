@@ -91,6 +91,12 @@ export interface League {
    * enforcement server-side (a write beyond this rejects with
    * `PICK_NOT_YET_OPEN`). Commissioner-configurable, 1-30, default 7. */
   pickHorizonDays: number;
+  /** How many golfers a member picks per tournament (1-10, default 3),
+   * and how far down the leaderboard still counts as a correct pick
+   * (1-50, default 10). Only meaningful for a league whose `sports`
+   * includes "golf". Commissioner-configurable. */
+  golfPickCount: number;
+  golfTopN: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -242,6 +248,55 @@ export interface BatchPickResultItem {
 
 export interface BatchPickResponse {
   results: BatchPickResultItem[];
+}
+
+// ---- Golf ------------------------------------------------------------------
+
+/** Golf doesn't use the slate/PickControl model at all — a tournament is
+ * a ~69-competitor leaderboard, not a 2-sided matchup, so it gets its
+ * own endpoint and its own screen. See docs/sports-pipeline.md. */
+export interface GolfTournament {
+  id: string;
+  name: string;
+  startsAt: string;
+  endsAt: string;
+  status: "scheduled" | "in_progress" | "final" | "postponed" | "canceled";
+  /** Server-computed `now() >= startsAt` as of the response — same
+   * read-not-enforcement caveat as SlateGame.locked. */
+  locked: boolean;
+}
+
+export interface GolfLeaderboardEntry {
+  externalId: string;
+  golferName: string;
+  /** Live leaderboard rank (1 = leader). Null until the provider posts
+   * one — never treated as a top-N finish. */
+  position: number | null;
+}
+
+export interface GolfCurrentResponse {
+  tournament: GolfTournament | null;
+  leaderboard: GolfLeaderboardEntry[];
+  /** The caller's own selections, always visible. Null if they haven't
+   * picked this tournament. */
+  myPick: string[] | null;
+  otherPicks: Array<{
+    leagueMemberId: string;
+    displayName: string;
+    hasPicked: boolean;
+    /** Null until the tournament locks — same privacy rule as the
+     * slate's `otherPicks[].selectedTeam`. */
+    golferExternalIds: string[] | null;
+  }>;
+  golfPickCount: number;
+  golfTopN: number;
+}
+
+export interface WrittenGolfPick {
+  id: string;
+  leagueMemberId: string;
+  tournamentId: string;
+  golferExternalIds: string[];
 }
 
 // ---- Standings and head-to-head --------------------------------------------
