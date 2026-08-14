@@ -230,7 +230,7 @@ describe("GET /leagues/:leagueId/slate", () => {
     void member;
   });
 
-  it("includes each game's home/away team logo URLs", async () => {
+  it("includes each game's home/away team logo URLs and colors", async () => {
     const owner = await createTestUser();
     const league = await createTestLeague(owner.id, { sports: ["mlb"], timezone: "UTC" });
     await createTestLeagueMember(owner.id, league.id, { role: "commissioner" });
@@ -240,6 +240,8 @@ describe("GET /leagues/:leagueId/slate", () => {
       awayTeam: "Cardinals",
       homeTeamLogoUrl: "https://a.espncdn.com/i/teamlogos/mlb/500/chc.png",
       awayTeamLogoUrl: "https://a.espncdn.com/i/teamlogos/mlb/500/stl.png",
+      homeTeamColor: "0e3386",
+      awayTeamColor: "c41e3a",
       startsAt: new Date(),
     });
 
@@ -250,9 +252,11 @@ describe("GET /leagues/:leagueId/slate", () => {
     const [game] = res.json().games;
     expect(game.homeTeamLogoUrl).toBe("https://a.espncdn.com/i/teamlogos/mlb/500/chc.png");
     expect(game.awayTeamLogoUrl).toBe("https://a.espncdn.com/i/teamlogos/mlb/500/stl.png");
+    expect(game.homeTeamColor).toBe("0e3386");
+    expect(game.awayTeamColor).toBe("c41e3a");
   });
 
-  it("returns null logo URLs for a game that has none", async () => {
+  it("returns null logo URLs and colors for a game that has none", async () => {
     const owner = await createTestUser();
     const league = await createTestLeague(owner.id, { sports: ["nfl"], timezone: "UTC" });
     await createTestLeagueMember(owner.id, league.id, { role: "commissioner" });
@@ -264,6 +268,8 @@ describe("GET /leagues/:leagueId/slate", () => {
     const [game] = res.json().games;
     expect(game.homeTeamLogoUrl).toBeNull();
     expect(game.awayTeamLogoUrl).toBeNull();
+    expect(game.homeTeamColor).toBeNull();
+    expect(game.awayTeamColor).toBeNull();
   });
 
   it("defaults to today in the league's timezone when date is omitted", async () => {

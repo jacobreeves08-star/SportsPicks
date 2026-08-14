@@ -197,6 +197,8 @@ export interface SlateGame {
   awayTeam: string;
   homeTeamLogoUrl: string | null;
   awayTeamLogoUrl: string | null;
+  homeTeamColor: string | null;
+  awayTeamColor: string | null;
   startsAt: string;
   status: "scheduled" | "in_progress" | "final" | "postponed" | "canceled";
   allowsDraw: boolean;

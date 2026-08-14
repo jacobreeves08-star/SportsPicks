@@ -71,6 +71,35 @@ describe("PickControl — structure and semantics", () => {
     render(<PickControl teams={teams} state={{ status: "open", selected: null }} />);
     expect(screen.queryByRole("presentation", { hidden: true })).not.toBeInTheDocument();
   });
+
+  it("fills the selected side in the team's own color, with readable text on top", () => {
+    const teamsWithColors: PickControlTeams = { ...teams, homeTeamColor: "0e3386", awayTeamColor: "c41e3a" };
+    render(<PickControl teams={teamsWithColors} state={{ status: "open", selected: "Bills" }} />);
+    const selected = screen.getByRole("radio", { name: "Bills" });
+    expect(selected.style.backgroundColor).toBe("rgb(14, 51, 134)"); // #0e3386
+    expect(selected.style.color).toBe("rgb(255, 255, 255)");
+    // The unselected side is untouched — no inline color of its own.
+    expect(screen.getByRole("radio", { name: "Jets" }).style.backgroundColor).toBe("");
+  });
+
+  it("falls back to the plain accent fill when the selected team has no known color", () => {
+    render(<PickControl teams={teams} state={{ status: "open", selected: "Bills" }} />);
+    expect(screen.getByRole("radio", { name: "Bills" }).style.backgroundColor).toBe("");
+  });
+
+  it("does NOT team-color a final game's selected-but-not-winning side — the win/loss framing takes over instead", () => {
+    const teamsWithColors: PickControlTeams = { ...teams, homeTeamColor: "0e3386", awayTeamColor: "c41e3a" };
+    const state: PickControlState = { status: "final", selected: "Jets", winningTeam: "Bills", outcome: "miss" };
+    render(<PickControl teams={teamsWithColors} state={state} />);
+    expect(screen.getByRole("radio", { name: "Jets" }).style.backgroundColor).toBe("");
+  });
+
+  it("does NOT team-color the winning side either — it stays the standard green hit treatment", () => {
+    const teamsWithColors: PickControlTeams = { ...teams, homeTeamColor: "0e3386", awayTeamColor: "c41e3a" };
+    const state: PickControlState = { status: "final", selected: "Bills", winningTeam: "Bills", outcome: "hit" };
+    render(<PickControl teams={teamsWithColors} state={state} />);
+    expect(screen.getByRole("radio", { name: "Bills" }).style.backgroundColor).toBe("");
+  });
 });
 
 describe("PickControl — interactivity per status", () => {

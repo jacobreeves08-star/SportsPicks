@@ -9,6 +9,7 @@ import { cx } from "../utils/cx.js";
 import visuallyHiddenStyles from "../utils/visually-hidden.module.css";
 import { describePickControl, describeSide } from "./describe-pick-control.js";
 import styles from "./PickControl.module.css";
+import { teamSelectionStyle } from "./team-selection-style.js";
 import type { PickControlState, PickControlTeams } from "./PickControl.types.js";
 
 export interface PickControlProps {
@@ -137,6 +138,16 @@ export function PickControl({ teams, state, onSelect, remainingMs, className }: 
           const isWinner = state.status === "final" && team === state.winningTeam;
           const logoUrl =
             team === teams.homeTeam ? teams.homeTeamLogoUrl : team === teams.awayTeam ? teams.awayTeamLogoUrl : null;
+          const teamColor =
+            team === teams.homeTeam ? teams.homeTeamColor : team === teams.awayTeam ? teams.awayTeamColor : null;
+          // Team-colored fill only while the pick is still "live" (not
+          // yet graded) — a final game's win/miss framing (green/muted,
+          // via .sideWinner / .sideInert below) is a different, more
+          // important signal at that point and takes over instead. Falls
+          // back to the plain accent fill (via .sideSelected alone) when
+          // there's no usable color — DRAW never has one, and neither
+          // does a manually-entered game.
+          const selectionStyle = isSelected && state.status !== "final" ? teamSelectionStyle(teamColor) : null;
           return (
             <button
               key={team}
@@ -152,6 +163,7 @@ export function PickControl({ teams, state, onSelect, remainingMs, className }: 
               onClick={() => {
                 if (interactive) onSelect?.(team);
               }}
+              style={selectionStyle ?? undefined}
               className={cx(
                 styles.side,
                 isSelected && styles.sideSelected,

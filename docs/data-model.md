@@ -81,6 +81,10 @@ game                     -- GLOBAL, never duplicated per league
                                                               -- re-ingest still finds the same row
   home_team_logo_url / away_team_logo_url (nullable)  -- ESPN's team.logo CDN URL, re-ingest-corrected
                                                         -- the same way as the external IDs above
+  home_team_color / away_team_color (nullable)  -- ESPN's team.color, 6-digit hex with no leading '#',
+                                                  -- re-ingest-corrected the same way; drives the client's
+                                                  -- team-colored selected-side fill (design-system/
+                                                  -- pick-control/team-selection-style.ts)
   allows_draw (boolean, default false)  -- true only for soccer competitions (epl/ucl/mls); gates
                                           -- 'DRAW' as a legal pick.selected_team value
   starts_at (timestamptz, UTC)

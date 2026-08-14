@@ -18,6 +18,8 @@ function slateGame(overrides: Partial<SlateResponse["games"][number]> = {}): Sla
     awayTeam: "Jets",
     homeTeamLogoUrl: null,
     awayTeamLogoUrl: null,
+    homeTeamColor: null,
+    awayTeamColor: null,
     startsAt: new Date(NOW + 60_000).toISOString(),
     status: "scheduled",
     allowsDraw: false,

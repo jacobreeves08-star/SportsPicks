@@ -132,6 +132,8 @@ export async function runScheduleIngest(providerOverride?: SportsProvider): Prom
             awayTeamExternalId: e.awayTeam.externalId,
             homeTeamLogoUrl: e.homeTeam.logoUrl,
             awayTeamLogoUrl: e.awayTeam.logoUrl,
+            homeTeamColor: e.homeTeam.color,
+            awayTeamColor: e.awayTeam.color,
             startsAt: e.startsAt,
             // schedule-ingest never inserts a brand-new row as 'final'
             // — only score-poll writes that transition (+ the result
@@ -152,6 +154,8 @@ export async function runScheduleIngest(providerOverride?: SportsProvider): Prom
             awayTeamExternalId: sql`excluded.away_team_external_id`,
             homeTeamLogoUrl: sql`excluded.home_team_logo_url`,
             awayTeamLogoUrl: sql`excluded.away_team_logo_url`,
+            homeTeamColor: sql`excluded.home_team_color`,
+            awayTeamColor: sql`excluded.away_team_color`,
             startsAt: sql`excluded.starts_at`,
             // The actual single-writer boundary, enforced at the row
             // level: once a game's status is 'final', this job can
