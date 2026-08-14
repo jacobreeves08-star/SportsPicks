@@ -43,7 +43,7 @@ This is the authoritative spec for how games move through the pipeline and what 
 ### Draw (soccer only)
 
 - Confirmed with the user directly: draws get a real third pick option, not a void.
-- `game.allows_draw` is `true` only for the three soccer competitions (`epl`, `ucl`, `mls` — see `ESPN_SPORT_SLUGS` in `apps/api/src/lib/sports-provider.ts`); `false` for every American-sports competition.
+- `game.allows_draw` is `true` only for the three soccer competitions (`epl`, `ucl`, `mls` — see `ESPN_SPORT_SLUGS` in `apps/api/src/lib/sports-provider.ts`); `false` for every other tracked sport, including the individual ones (tennis, MMA) — a match/fight always has a winner.
 - The pick-validation trigger (`check_pick_selected_team`, `apps/api/src/db/migrations/0003_sports_pipeline.sql`) accepts `selected_team = 'DRAW'` only when the referenced game's `allows_draw` is true — a `'DRAW'` pick against an NFL game is rejected at the database level, not just in application code.
 - On a level final, `result.winning_team` is written as the same `'DRAW'` sentinel, so grading logic stays uniform (`pick.selected_team === result.winning_team`, no special-casing for soccer versus everything else).
 - **A genuine non-soccer tie** (rare but real — e.g. an NFL game tied after overtime) is handled by the same mechanism "by accident": `result.winning_team` becomes `'DRAW'` even though no pick could ever legally hold that value for a non-draw-eligible game. Grading later correctly finds nobody's pick right for that game. This is intentional, not an oversight — documented here so it isn't mistaken for a bug later.

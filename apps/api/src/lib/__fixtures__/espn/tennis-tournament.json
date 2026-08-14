@@ -1,0 +1,58 @@
+{
+  "id": "718-2026",
+  "date": "2026-08-11T04:00Z",
+  "endDate": "2026-08-24T03:59Z",
+  "name": "Cincinnati Open",
+  "groupings": [
+    {
+      "grouping": { "id": "1", "slug": "mens-singles", "displayName": "Men's Singles" },
+      "competitions": [
+        {
+          "id": "184414",
+          "date": "2026-08-11T16:05Z",
+          "status": {
+            "type": {
+              "id": "1",
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            }
+          },
+          "competitors": [
+            {
+              "id": "4030",
+              "homeAway": "home",
+              "athlete": { "displayName": "Dane Sweeny" }
+            },
+            {
+              "id": "4444",
+              "homeAway": "away",
+              "athlete": { "displayName": "Christopher O'Connell" }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "grouping": { "id": "2", "slug": "mens-doubles", "displayName": "Men's Doubles" },
+      "competitions": [
+        {
+          "id": "184500",
+          "date": "2026-08-11T18:00Z",
+          "status": {
+            "type": {
+              "id": "1",
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            }
+          },
+          "competitors": [
+            { "id": "9001", "homeAway": "home", "athlete": { "displayName": "Doubles Team A" } },
+            { "id": "9002", "homeAway": "away", "athlete": { "displayName": "Doubles Team B" } }
+          ]
+        }
+      ]
+    }
+  ]
+}

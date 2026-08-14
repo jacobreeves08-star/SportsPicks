@@ -20,6 +20,13 @@ export const MAX_GAME_DURATION_HOURS: Record<string, number> = {
   epl: 2.5,
   ucl: 2.5,
   mls: 2.5,
+  // A best-of-5 Grand Slam match can genuinely run 4-5 hours; generous
+  // margin for rain/heat delays on top of that.
+  tennis: 5,
+  // A single fight is short, but ESPN's per-fight date reflects an
+  // estimated start that late-running earlier fights on the same card
+  // regularly blow past — margin for that, not just the fight itself.
+  mma: 1.5,
 };
 
 export interface StaleGame {

@@ -1,0 +1,39 @@
+{
+  "id": "600059185",
+  "date": "2026-08-15T21:00Z",
+  "name": "UFC 330: Makhachev vs. Machado Garry",
+  "competitions": [
+    {
+      "id": "401886760",
+      "date": "2026-08-15T21:05Z",
+      "status": {
+        "type": {
+          "id": "3",
+          "name": "STATUS_FINAL",
+          "state": "post",
+          "completed": true
+        }
+      },
+      "competitors": [
+        { "id": "3001914", "order": 1, "winner": true, "athlete": { "displayName": "Jeremiah Wells" } },
+        { "id": "4297311", "order": 2, "winner": false, "athlete": { "displayName": "Themba Gorimbo" } }
+      ]
+    },
+    {
+      "id": "401886763",
+      "date": "2026-08-15T23:30Z",
+      "status": {
+        "type": {
+          "id": "1",
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        }
+      },
+      "competitors": [
+        { "id": "3970873", "order": 1, "athlete": { "displayName": "Islam Makhachev" } },
+        { "id": "4685438", "order": 2, "athlete": { "displayName": "Jack Della Maddalena" } }
+      ]
+    }
+  ]
+}

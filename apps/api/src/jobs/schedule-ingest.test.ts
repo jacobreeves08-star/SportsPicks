@@ -238,7 +238,7 @@ describe("runScheduleIngest — job_run tracking", () => {
       fetchResults: async () => [],
     };
 
-    await expect(runScheduleIngest(provider)).rejects.toThrow("all 9 sports failed to fetch");
+    await expect(runScheduleIngest(provider)).rejects.toThrow("all 11 sports failed to fetch");
 
     const [run] = await db.select().from(jobRun).where(eq(jobRun.jobName, "schedule-ingest"));
     expect(run!.succeeded).toBe(false);
@@ -266,7 +266,7 @@ describe("runScheduleIngest — one sport failing does not block the others", ()
 
     const [run] = await db.select().from(jobRun).where(eq(jobRun.jobName, "schedule-ingest"));
     expect(run!.succeeded).toBe(true);
-    expect(run!.itemCount).toBe(8); // every sport except the one that 404'd
+    expect(run!.itemCount).toBe(10); // every sport except the one that 404'd
   });
 
   it("does not fire the all-sports-zero alert when only some sports errored but others returned real games", async () => {

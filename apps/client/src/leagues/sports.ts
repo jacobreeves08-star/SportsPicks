@@ -21,6 +21,8 @@ export const SPORT_OPTIONS: SportOption[] = [
   { value: "epl", label: "Premier League" },
   { value: "ucl", label: "Champions League" },
   { value: "mls", label: "MLS" },
+  { value: "tennis", label: "Tennis" },
+  { value: "mma", label: "MMA" },
 ];
 
 /** Falls back to the raw code for anything not in the list above
