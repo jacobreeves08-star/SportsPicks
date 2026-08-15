@@ -176,6 +176,22 @@ function GolferRow({
           <NumericText weight="bold" size="sm" className={styles.positionBadge}>
             {entry.position ?? "—"}
           </NumericText>
+          {entry.flagUrl ? (
+            // Decorative, same reasoning as PickControl's side badge:
+            // the golfer's name sits immediately after it, so an alt
+            // would double-announce. A dead CDN URL hides itself rather
+            // than leaving a broken-image glyph in the row.
+            <img
+              src={entry.flagUrl}
+              alt=""
+              aria-hidden="true"
+              className={styles.golferFlag}
+              loading="lazy"
+              onError={(e) => {
+                e.currentTarget.style.display = "none";
+              }}
+            />
+          ) : null}
           <Text weight={selected ? "bold" : "regular"}>{entry.golferName}</Text>
         </Stack>
         {locked && inTopN ? (

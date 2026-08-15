@@ -133,6 +133,7 @@ async function ingestOneTournament(snapshot: CanonicalTournamentSnapshot): Promi
           tournamentId: row.id,
           externalId: entry.externalId,
           golferName: entry.golferName,
+          flagUrl: entry.flagUrl,
           position: entry.position,
         })),
       )
@@ -140,6 +141,7 @@ async function ingestOneTournament(snapshot: CanonicalTournamentSnapshot): Promi
         target: [tournamentEntry.tournamentId, tournamentEntry.externalId],
         set: {
           golferName: sql`excluded.golfer_name`,
+          flagUrl: sql`excluded.flag_url`,
           position: sql`excluded.position`,
           updatedAt: sql`now()`,
         },

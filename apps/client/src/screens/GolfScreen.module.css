@@ -41,6 +41,16 @@
   border: 1.5px solid var(--color-pick-mine);
 }
 
+/* Matches PickControl's .sideLogo box so a flag reads at the same
+   weight on the slate and on this leaderboard. `contain` because the
+   provider's flags are not all one aspect ratio. */
+.golferFlag {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
 .positionBadge {
   display: inline-flex;
   align-items: center;

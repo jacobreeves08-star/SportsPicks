@@ -89,6 +89,8 @@ function game(overrides: Partial<SlateGame> = {}): SlateGame {
     awayTeam: "Jets",
     homeTeamLogoUrl: null,
     awayTeamLogoUrl: null,
+    homeTeamFlagUrl: null,
+    awayTeamFlagUrl: null,
     homeTeamColor: null,
     awayTeamColor: null,
     // Well within the default 7-day pick horizon, but still safely in

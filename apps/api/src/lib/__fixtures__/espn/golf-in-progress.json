@@ -15,9 +15,41 @@
   "competitions": [
     {
       "competitors": [
-        { "id": "9478", "order": 1, "athlete": { "displayName": "Scottie Scheffler" } },
-        { "id": "11382", "order": 2, "athlete": { "displayName": "Sungjae Im" } },
-        { "id": "4375972", "order": 3, "athlete": { "displayName": "Ludvig Åberg" } }
+        {
+          "id": "9478",
+          "order": 1,
+          "athlete": {
+            "displayName": "Scottie Scheffler",
+            "flag": {
+              "href": "https://a.espncdn.com/i/teamlogos/countries/500/usa.png",
+              "alt": "USA",
+              "rel": [
+                "country-flag"
+              ]
+            }
+          }
+        },
+        {
+          "id": "11382",
+          "order": 2,
+          "athlete": {
+            "displayName": "Sungjae Im",
+            "flag": {
+              "href": "https://a.espncdn.com/i/teamlogos/countries/500/kor.png",
+              "alt": "KOR",
+              "rel": [
+                "country-flag"
+              ]
+            }
+          }
+        },
+        {
+          "id": "4375972",
+          "order": 3,
+          "athlete": {
+            "displayName": "Ludvig Åberg"
+          }
+        }
       ]
     }
   ]

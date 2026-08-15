@@ -19,7 +19,13 @@ beforeEach(async () => {
   await truncateAllTables();
 });
 
-function snapshot(overrides: Partial<CanonicalTournamentSnapshot["tournament"]> = {}, entries: CanonicalTournamentSnapshot["leaderboard"] = []): CanonicalTournamentSnapshot {
+// `entries` takes PARTIAL leaderboard rows and fills the rest in here,
+// so a case that doesn't care about a golfer's flag says nothing about
+// it — only the flag-specific tests below mention flagUrl at all.
+function snapshot(
+  overrides: Partial<CanonicalTournamentSnapshot["tournament"]> = {},
+  entries: Array<Partial<CanonicalTournamentSnapshot["leaderboard"][number]>> = [],
+): CanonicalTournamentSnapshot {
   return {
     tournament: {
       externalId: "espn-t1",
@@ -29,7 +35,13 @@ function snapshot(overrides: Partial<CanonicalTournamentSnapshot["tournament"]> 
       status: "scheduled",
       ...overrides,
     },
-    leaderboard: entries,
+    leaderboard: entries.map((e) => ({
+      externalId: "g1",
+      golferName: "Golfer One",
+      flagUrl: null,
+      position: null,
+      ...e,
+    })),
   };
 }
 

@@ -44,10 +44,23 @@ describe("EspnGolfProvider.fetchTournaments", () => {
     });
     expect(snapshot?.tournament.startsAt.toISOString()).toBe("2026-08-13T04:00:00.000Z");
     expect(snapshot?.tournament.endsAt.toISOString()).toBe("2026-08-16T04:00:00.000Z");
+    // The third golfer deliberately has no `flag` in the fixture — one
+    // leaderboard covers both the populated and the absent case, since
+    // a missing flag must produce null rather than failing the parse.
     expect(snapshot?.leaderboard).toEqual([
-      { externalId: "9478", golferName: "Scottie Scheffler", position: 1 },
-      { externalId: "11382", golferName: "Sungjae Im", position: 2 },
-      { externalId: "4375972", golferName: "Ludvig Åberg", position: 3 },
+      {
+        externalId: "9478",
+        golferName: "Scottie Scheffler",
+        flagUrl: "https://a.espncdn.com/i/teamlogos/countries/500/usa.png",
+        position: 1,
+      },
+      {
+        externalId: "11382",
+        golferName: "Sungjae Im",
+        flagUrl: "https://a.espncdn.com/i/teamlogos/countries/500/kor.png",
+        position: 2,
+      },
+      { externalId: "4375972", golferName: "Ludvig Åberg", flagUrl: null, position: 3 },
     ]);
   });
 

@@ -260,6 +260,34 @@ describe("EspnSportsProvider.fetchSchedule — individual sports (tennis, MMA)",
     expect(entries[0]!.startsAt.toISOString()).toBe("2026-08-15T21:05:00.000Z");
     expect(entries[1]!.startsAt.toISOString()).toBe("2026-08-15T23:30:00.000Z");
   });
+
+  it("reads an MMA athlete's country flag into flagUrl, leaving the team-only logo/color null", async () => {
+    stubFetchOnce([loadFixtureEvent("mma-card")]);
+    const provider = newProvider();
+    const entries = await provider.fetchSchedule({ sport: "mma", fromDate: "20260815", toDate: "20260815" });
+
+    expect(entries[0]!.homeTeam).toMatchObject({
+      flagUrl: "https://a.espncdn.com/i/teamlogos/countries/500/usa.png",
+      // A fighter is a person, not a franchise — the crest and team
+      // color have no athlete-side equivalent and must stay null rather
+      // than being back-filled from the flag.
+      logoUrl: null,
+      color: null,
+    });
+    expect(entries[0]!.awayTeam.flagUrl).toBe("https://a.espncdn.com/i/teamlogos/countries/500/zim.png");
+  });
+
+  it("leaves flagUrl null when an athlete competitor carries no flag at all", async () => {
+    // The tennis fixture's competitors have no `flag` key — the same
+    // shape ESPN returns for an athlete it has no nationality for. This
+    // must degrade to a text-only side, never fail the parse.
+    stubFetchOnce([loadFixtureEvent("tennis-tournament")]);
+    const provider = newProvider();
+    const entries = await provider.fetchSchedule({ sport: "tennis", fromDate: "20260811", toDate: "20260811" });
+
+    expect(entries[0]!.homeTeam.flagUrl).toBeNull();
+    expect(entries[0]!.awayTeam.flagUrl).toBeNull();
+  });
 });
 
 describe("EspnSportsProvider.fetchResults — individual sports (tennis, MMA)", () => {

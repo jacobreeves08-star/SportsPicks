@@ -27,6 +27,11 @@ export interface CanonicalTeam {
   // confirmed present alongside `logo` across every tracked sport
   // against the live API. Same optional/null reasoning as logoUrl.
   color: string | null;
+  // ESPN's `athlete.flag.href` — the individual sports' stand-in for a
+  // crest. Mutually exclusive with `logoUrl` in practice: a competitor
+  // is either a franchise (logo, color) or a person (flag), never both.
+  // Same optional/null reasoning as the two fields above.
+  flagUrl: string | null;
 }
 
 export interface CanonicalScheduleEntry {
@@ -151,10 +156,18 @@ const espnTeamSchema = z.object({
 
 // Individual sports (tennis/MMA) carry an `athlete` object instead of
 // `team` — same "who is this side" question, different ESPN field
-// name. Only `displayName` is read; a competitor's own top-level `id`
-// (below) already works as a stable external ID for both shapes.
+// name. A competitor's own top-level `id` (below) already works as a
+// stable external ID for both shapes, so no id is read here.
 const espnAthleteSchema = z.object({
   displayName: z.string(),
+  // The athlete-side counterpart to `team.logo`: ESPN returns
+  // `{ href, alt, rel: ["country-flag"] }` here (confirmed live for
+  // mma/ufc and tennis/atp). Optional for the same reason `team.logo`
+  // is — a missing image must degrade to a text-only side, never fail
+  // the whole schedule ingest. Only `href` is kept: the side's own
+  // label already announces the competitor by name, so the flag renders
+  // decoratively and has no use for `alt`'s country string.
+  flag: z.object({ href: z.string() }).optional(),
 });
 
 const espnCompetitorSchema = z.object({
@@ -245,7 +258,7 @@ function sideOf(competitor: { homeAway?: "home" | "away"; order?: number }, fall
 function participantOf(competitor: {
   id: string;
   team?: { id: string; displayName: string; logo?: string; color?: string };
-  athlete?: { displayName: string };
+  athlete?: { displayName: string; flag?: { href: string } };
 }): CanonicalTeam | null {
   const displayName = competitor.team?.displayName ?? competitor.athlete?.displayName;
   if (!displayName) return null;
@@ -262,6 +275,10 @@ function participantOf(competitor: {
     // faked from something unrelated.
     logoUrl: competitor.team?.logo ?? null,
     color: competitor.team?.color ?? null,
+    // …and only athletes carry this one. Read off `athlete` alone, not
+    // coalesced into `logoUrl`, so the two stay independently
+    // inspectable downstream (see 0014_athlete_country_flags.sql).
+    flagUrl: competitor.athlete?.flag?.href ?? null,
   };
 }
 

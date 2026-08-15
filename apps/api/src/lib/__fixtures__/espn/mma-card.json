@@ -15,8 +15,36 @@
         }
       },
       "competitors": [
-        { "id": "3001914", "order": 1, "winner": true, "athlete": { "displayName": "Jeremiah Wells" } },
-        { "id": "4297311", "order": 2, "winner": false, "athlete": { "displayName": "Themba Gorimbo" } }
+        {
+          "id": "3001914",
+          "order": 1,
+          "winner": true,
+          "athlete": {
+            "displayName": "Jeremiah Wells",
+            "flag": {
+              "href": "https://a.espncdn.com/i/teamlogos/countries/500/usa.png",
+              "alt": "USA",
+              "rel": [
+                "country-flag"
+              ]
+            }
+          }
+        },
+        {
+          "id": "4297311",
+          "order": 2,
+          "winner": false,
+          "athlete": {
+            "displayName": "Themba Gorimbo",
+            "flag": {
+              "href": "https://a.espncdn.com/i/teamlogos/countries/500/zim.png",
+              "alt": "ZIM",
+              "rel": [
+                "country-flag"
+              ]
+            }
+          }
+        }
       ]
     },
     {
@@ -31,8 +59,34 @@
         }
       },
       "competitors": [
-        { "id": "3970873", "order": 1, "athlete": { "displayName": "Islam Makhachev" } },
-        { "id": "4685438", "order": 2, "athlete": { "displayName": "Jack Della Maddalena" } }
+        {
+          "id": "3970873",
+          "order": 1,
+          "athlete": {
+            "displayName": "Islam Makhachev",
+            "flag": {
+              "href": "https://a.espncdn.com/i/teamlogos/countries/500/rus.png",
+              "alt": "RUS",
+              "rel": [
+                "country-flag"
+              ]
+            }
+          }
+        },
+        {
+          "id": "4685438",
+          "order": 2,
+          "athlete": {
+            "displayName": "Jack Della Maddalena",
+            "flag": {
+              "href": "https://a.espncdn.com/i/teamlogos/countries/500/aus.png",
+              "alt": "AUS",
+              "rel": [
+                "country-flag"
+              ]
+            }
+          }
+        }
       ]
     }
   ]

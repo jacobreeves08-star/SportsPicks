@@ -205,6 +205,11 @@ export interface SlateGame {
   awayTeamLogoUrl: string | null;
   homeTeamColor: string | null;
   awayTeamColor: string | null;
+  /** Country flag for an individual-sport competitor (MMA, tennis) —
+   * the provider's stand-in for a crest, which a person never has. A
+   * side has at most one of logo/flag, never both. */
+  homeTeamFlagUrl: string | null;
+  awayTeamFlagUrl: string | null;
   startsAt: string;
   status: "scheduled" | "in_progress" | "final" | "postponed" | "canceled";
   allowsDraw: boolean;
@@ -269,6 +274,10 @@ export interface GolfTournament {
 export interface GolfLeaderboardEntry {
   externalId: string;
   golferName: string;
+  /** Country flag URL — the only image a golfer has, since an
+   * individual competitor has no crest. Null when the provider omits
+   * it, in which case the row renders name-only. */
+  flagUrl: string | null;
   /** Live leaderboard rank (1 = leader). Null until the provider posts
    * one — never treated as a top-N finish. */
   position: number | null;

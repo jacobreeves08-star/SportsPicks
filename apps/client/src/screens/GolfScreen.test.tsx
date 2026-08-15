@@ -65,9 +65,9 @@ function golfResponse(overrides: Partial<GolfCurrentResponse> = {}): GolfCurrent
       locked: false,
     },
     leaderboard: [
-      { externalId: "g1", golferName: "Scottie Scheffler", position: null },
-      { externalId: "g2", golferName: "Sungjae Im", position: null },
-      { externalId: "g3", golferName: "Ludvig Aberg", position: null },
+      { externalId: "g1", golferName: "Scottie Scheffler", flagUrl: null, position: null },
+      { externalId: "g2", golferName: "Sungjae Im", flagUrl: null, position: null },
+      { externalId: "g3", golferName: "Ludvig Aberg", flagUrl: null, position: null },
     ],
     myPick: null,
     otherPicks: [{ leagueMemberId: "member-2", displayName: "Bob", hasPicked: false, golferExternalIds: null }],
@@ -105,6 +105,32 @@ describe("GolfScreen — picking (tournament not started)", () => {
     expect(screen.getByText(/top-10 finish/)).toBeInTheDocument();
     expect(screen.getByText("Scottie Scheffler")).toBeInTheDocument();
     expect(screen.getByText("0 of 2 selected")).toBeInTheDocument();
+  });
+
+  it("shows a golfer's country flag decoratively, and nothing at all when they have none", async () => {
+    await mockShell();
+    const { getCurrentGolf } = await import("../api/endpoints.js");
+    vi.mocked(getCurrentGolf).mockResolvedValue(
+      golfResponse({
+        leaderboard: [
+          {
+            externalId: "g1",
+            golferName: "Scottie Scheffler",
+            flagUrl: "https://a.espncdn.com/i/teamlogos/countries/500/usa.png",
+            position: 1,
+          },
+          // No flag — the row must still render, name-only.
+          { externalId: "g2", golferName: "Sungjae Im", flagUrl: null, position: 2 },
+        ],
+      }),
+    );
+
+    await renderRouteAt("/leagues/league-1/golf");
+
+    expect(await screen.findByText("Sungjae Im")).toBeInTheDocument();
+    const flags = screen.getAllByRole("presentation", { hidden: true });
+    expect(flags).toHaveLength(1);
+    expect(flags[0]).toHaveAttribute("src", "https://a.espncdn.com/i/teamlogos/countries/500/usa.png");
   });
 
   it("selecting golfers updates the count and enables saving only at exactly golfPickCount", async () => {
@@ -210,8 +236,8 @@ describe("GolfScreen — locked (tournament under way)", () => {
           locked: true,
         },
         leaderboard: [
-          { externalId: "g1", golferName: "Scottie Scheffler", position: 1 },
-          { externalId: "g2", golferName: "Sungjae Im", position: 25 },
+          { externalId: "g1", golferName: "Scottie Scheffler", flagUrl: null, position: 1 },
+          { externalId: "g2", golferName: "Sungjae Im", flagUrl: null, position: 25 },
         ],
         myPick: ["g1"],
       }),

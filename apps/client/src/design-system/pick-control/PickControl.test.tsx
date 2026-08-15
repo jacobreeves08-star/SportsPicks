@@ -72,6 +72,51 @@ describe("PickControl — structure and semantics", () => {
     expect(screen.queryByRole("presentation", { hidden: true })).not.toBeInTheDocument();
   });
 
+  it("falls back to a side's country flag when it has no logo — the MMA/tennis case", () => {
+    const fighters: PickControlTeams = {
+      ...teams,
+      homeTeam: "Islam Makhachev",
+      awayTeam: "Jack Della Maddalena",
+      // An athlete competitor never carries a crest, only a flag.
+      homeTeamLogoUrl: null,
+      awayTeamLogoUrl: null,
+      homeTeamFlagUrl: "https://a.espncdn.com/i/teamlogos/countries/500/rus.png",
+      awayTeamFlagUrl: "https://a.espncdn.com/i/teamlogos/countries/500/aus.png",
+    };
+    render(<PickControl teams={fighters} state={{ status: "open", selected: null }} />);
+    const images = screen.getAllByRole("presentation", { hidden: true });
+    expect(images.map((img) => img.getAttribute("src"))).toEqual([
+      "https://a.espncdn.com/i/teamlogos/countries/500/rus.png",
+      "https://a.espncdn.com/i/teamlogos/countries/500/aus.png",
+    ]);
+  });
+
+  it("prefers the logo over the flag when a side somehow has both", () => {
+    const both: PickControlTeams = {
+      ...teams,
+      homeTeamLogoUrl: "https://a.espncdn.com/i/teamlogos/nfl/500/buf.png",
+      homeTeamFlagUrl: "https://a.espncdn.com/i/teamlogos/countries/500/usa.png",
+    };
+    render(<PickControl teams={both} state={{ status: "open", selected: null }} />);
+    const images = screen.getAllByRole("presentation", { hidden: true });
+    expect(images).toHaveLength(1);
+    expect(images[0]).toHaveAttribute("src", "https://a.espncdn.com/i/teamlogos/nfl/500/buf.png");
+  });
+
+  it("leaves DRAW imageless even when both real sides have flags", () => {
+    const drawable: PickControlTeams = {
+      ...teams,
+      allowsDraw: true,
+      homeTeamFlagUrl: "https://a.espncdn.com/i/teamlogos/countries/500/eng.png",
+      awayTeamFlagUrl: "https://a.espncdn.com/i/teamlogos/countries/500/esp.png",
+    };
+    render(<PickControl teams={drawable} state={{ status: "open", selected: null }} />);
+    // Two images for two competitors — the third side is DRAW, which
+    // matches neither team name and so resolves to no badge at all.
+    expect(screen.getAllByRole("presentation", { hidden: true })).toHaveLength(2);
+    expect(screen.getByRole("radio", { name: "Draw" }).querySelector("img")).toBeNull();
+  });
+
   it("fills the selected side in the team's own color, with readable text on top", () => {
     const teamsWithColors: PickControlTeams = { ...teams, homeTeamColor: "0e3386", awayTeamColor: "c41e3a" };
     render(<PickControl teams={teamsWithColors} state={{ status: "open", selected: "Bills" }} />);

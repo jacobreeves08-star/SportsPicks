@@ -30,6 +30,10 @@ export interface CanonicalTournament {
 export interface CanonicalLeaderboardEntry {
   externalId: string;
   golferName: string;
+  // ESPN's `athlete.flag.href` — a country-flag CDN URL, the only image
+  // an individual competitor has. Null when the provider omits it, in
+  // which case the leaderboard renders name-only.
+  flagUrl: string | null;
   // Null until the provider posts a score (tournament not yet under
   // way, or a golfer who hasn't teed off in the current round yet).
   position: number | null;
@@ -63,6 +67,11 @@ const espnStatusTypeSchema = z.object({
 
 const espnGolferSchema = z.object({
   displayName: z.string(),
+  // Same `{ href, alt, rel: ["country-flag"] }` object the team-sport
+  // adapter reads off an MMA/tennis athlete (confirmed live for
+  // golf/pga too). Optional so a missing image degrades to a
+  // name-only leaderboard row rather than failing the ingest.
+  flag: z.object({ href: z.string() }).optional(),
 });
 
 const espnGolfCompetitorSchema = z.object({
@@ -121,6 +130,7 @@ function mapEventToSnapshot(event: EspnGolfEvent): CanonicalTournamentSnapshot |
     leaderboard: competitors.map((c) => ({
       externalId: c.id,
       golferName: c.athlete.displayName,
+      flagUrl: c.athlete.flag?.href ?? null,
       position: c.order ?? null,
     })),
   };

@@ -29,6 +29,15 @@ export interface PickControlTeams {
    * renders text-only when absent. */
   homeTeamLogoUrl?: string | null;
   awayTeamLogoUrl?: string | null;
+  /** Country flag image URL, sourced from the provider (ESPN's
+   * `athlete.flag.href`) — what an INDIVIDUAL-sport side has in place
+   * of a crest (MMA and tennis; golf has its own screen entirely).
+   * Rendered only when the matching logo URL is absent, so a team
+   * sport's crest always wins if both were somehow present. Same
+   * optional/nullable contract as the logo URLs: absent means the side
+   * renders text-only. */
+  homeTeamFlagUrl?: string | null;
+  awayTeamFlagUrl?: string | null;
   /** Team primary color, sourced from the provider (ESPN's
    * `team.color`) as a 6-digit hex string with NO leading '#' (e.g.
    * `"0e3386"`) — matches the wire format, converted to a real CSS

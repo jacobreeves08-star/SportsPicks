@@ -197,6 +197,12 @@ export const game = pgTable(
     // URLs above.
     homeTeamColor: text("home_team_color"),
     awayTeamColor: text("away_team_color"),
+    // ESPN's `athlete.flag.href` — set only for the individual sports
+    // (MMA, tennis), whose competitors carry an athlete instead of a
+    // team and therefore never populate the logo columns above. The two
+    // are mutually exclusive per competitor; see 0014's header.
+    homeTeamFlagUrl: text("home_team_flag_url"),
+    awayTeamFlagUrl: text("away_team_flag_url"),
     startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
     status: text("status").notNull().default("scheduled"),
     // Set by schedule-ingest based on sport (true only for soccer
@@ -362,6 +368,10 @@ export const tournamentEntry = pgTable(
       .references(() => tournament.id),
     externalId: text("external_id").notNull(),
     golferName: text("golfer_name").notNull(),
+    // ESPN's `athlete.flag.href` — a country-flag CDN URL. The only
+    // image a golfer has (there is no crest for an individual), so the
+    // leaderboard falls back to name-only text when it's null.
+    flagUrl: text("flag_url"),
     position: integer("position"),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

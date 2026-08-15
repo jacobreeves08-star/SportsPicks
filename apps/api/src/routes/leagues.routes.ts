@@ -55,6 +55,11 @@ interface SlateResponse {
     awayTeamLogoUrl: string | null;
     homeTeamColor: string | null;
     awayTeamColor: string | null;
+    // Set only for the individual sports (MMA, tennis), whose sides are
+    // people rather than franchises and so never have a crest. The
+    // client renders logo-when-present, flag otherwise.
+    homeTeamFlagUrl: string | null;
+    awayTeamFlagUrl: string | null;
     startsAt: Date;
     status: string;
     allowsDraw: boolean;
@@ -793,6 +798,8 @@ export async function leaguesRoutes(app: FastifyInstance): Promise<void> {
           away_team_logo_url: string | null;
           home_team_color: string | null;
           away_team_color: string | null;
+          home_team_flag_url: string | null;
+          away_team_flag_url: string | null;
           starts_at: string;
           status: string;
           allows_draw: boolean;
@@ -809,6 +816,7 @@ export async function leaguesRoutes(app: FastifyInstance): Promise<void> {
           select
             g.id as game_id, g.sport, g.home_team, g.away_team, g.home_team_logo_url, g.away_team_logo_url,
             g.home_team_color, g.away_team_color,
+            g.home_team_flag_url, g.away_team_flag_url,
             g.starts_at, g.status, g.allows_draw,
             r.winning_team,
             (now() >= g.starts_at) as locked,
@@ -832,6 +840,7 @@ export async function leaguesRoutes(app: FastifyInstance): Promise<void> {
             and lm.league_id = ${leagueId} and lm.left_at is null
           group by g.id, g.sport, g.home_team, g.away_team, g.home_team_logo_url, g.away_team_logo_url,
             g.home_team_color, g.away_team_color,
+            g.home_team_flag_url, g.away_team_flag_url,
             g.starts_at, g.status, g.allows_draw, r.winning_team
           order by g.starts_at
         `);
@@ -855,6 +864,8 @@ export async function leaguesRoutes(app: FastifyInstance): Promise<void> {
             awayTeam: row.away_team,
             homeTeamLogoUrl: row.home_team_logo_url,
             awayTeamLogoUrl: row.away_team_logo_url,
+            homeTeamFlagUrl: row.home_team_flag_url,
+            awayTeamFlagUrl: row.away_team_flag_url,
             homeTeamColor: row.home_team_color,
             awayTeamColor: row.away_team_color,
             startsAt: new Date(row.starts_at),
@@ -932,7 +943,12 @@ export async function leaguesRoutes(app: FastifyInstance): Promise<void> {
       const locked = nowUtc().toJSDate() >= tournamentRow.startsAt;
 
       const entries = await db
-        .select({ externalId: tournamentEntry.externalId, golferName: tournamentEntry.golferName, position: tournamentEntry.position })
+        .select({
+          externalId: tournamentEntry.externalId,
+          golferName: tournamentEntry.golferName,
+          flagUrl: tournamentEntry.flagUrl,
+          position: tournamentEntry.position,
+        })
         .from(tournamentEntry)
         .where(eq(tournamentEntry.tournamentId, tournamentRow.id))
         .orderBy(sql`${tournamentEntry.position} is null, ${tournamentEntry.position} asc`);

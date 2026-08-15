@@ -31,8 +31,8 @@ function scheduleEntry(overrides: Partial<CanonicalScheduleEntry> = {}): Canonic
     sport: "nfl",
     startsAt: new Date("2026-09-14T17:00:00.000Z"),
     status: "scheduled",
-    homeTeam: { externalId: "1", displayName: "Home Team", logoUrl: null, color: null },
-    awayTeam: { externalId: "2", displayName: "Away Team", logoUrl: null, color: null },
+    homeTeam: { externalId: "1", displayName: "Home Team", logoUrl: null, color: null, flagUrl: null },
+    awayTeam: { externalId: "2", displayName: "Away Team", logoUrl: null, color: null, flagUrl: null },
     allowsDraw: false,
     ...overrides,
   };
@@ -70,12 +70,12 @@ describe("runScheduleIngest — idempotent upsert", () => {
 
   it("a name drift for the same team external ID is corrected on re-ingest", async () => {
     const provider1 = new MockSportsProvider({
-      schedule: [scheduleEntry({ homeTeam: { externalId: "1", displayName: "Old Name", logoUrl: null, color: null } })],
+      schedule: [scheduleEntry({ homeTeam: { externalId: "1", displayName: "Old Name", logoUrl: null, color: null, flagUrl: null } })],
     });
     await runScheduleIngest(provider1);
 
     const provider2 = new MockSportsProvider({
-      schedule: [scheduleEntry({ homeTeam: { externalId: "1", displayName: "New Name", logoUrl: null, color: null } })],
+      schedule: [scheduleEntry({ homeTeam: { externalId: "1", displayName: "New Name", logoUrl: null, color: null, flagUrl: null } })],
     });
     await runScheduleIngest(provider2);
 
@@ -88,7 +88,7 @@ describe("runScheduleIngest — idempotent upsert", () => {
     const provider1 = new MockSportsProvider({
       schedule: [
         scheduleEntry({
-          homeTeam: { externalId: "1", displayName: "Home Team", logoUrl: "https://a.espncdn.com/old.png", color: null },
+          homeTeam: { externalId: "1", displayName: "Home Team", logoUrl: "https://a.espncdn.com/old.png", color: null, flagUrl: null },
         }),
       ],
     });
@@ -99,7 +99,7 @@ describe("runScheduleIngest — idempotent upsert", () => {
     const provider2 = new MockSportsProvider({
       schedule: [
         scheduleEntry({
-          homeTeam: { externalId: "1", displayName: "Home Team", logoUrl: "https://a.espncdn.com/new.png", color: null },
+          homeTeam: { externalId: "1", displayName: "Home Team", logoUrl: "https://a.espncdn.com/new.png", color: null, flagUrl: null },
         }),
       ],
     });
@@ -111,7 +111,7 @@ describe("runScheduleIngest — idempotent upsert", () => {
   it("a team color is persisted on insert and corrected on re-ingest, same as the logo URL", async () => {
     const provider1 = new MockSportsProvider({
       schedule: [
-        scheduleEntry({ homeTeam: { externalId: "1", displayName: "Home Team", logoUrl: null, color: "0e3386" } }),
+        scheduleEntry({ homeTeam: { externalId: "1", displayName: "Home Team", logoUrl: null, color: "0e3386", flagUrl: null } }),
       ],
     });
     await runScheduleIngest(provider1);
@@ -120,7 +120,7 @@ describe("runScheduleIngest — idempotent upsert", () => {
 
     const provider2 = new MockSportsProvider({
       schedule: [
-        scheduleEntry({ homeTeam: { externalId: "1", displayName: "Home Team", logoUrl: null, color: "cc3433" } }),
+        scheduleEntry({ homeTeam: { externalId: "1", displayName: "Home Team", logoUrl: null, color: "cc3433", flagUrl: null } }),
       ],
     });
     await runScheduleIngest(provider2);
@@ -152,8 +152,8 @@ describe("runScheduleIngest — never downgrades an already-final game", () => {
         scheduleEntry({
           externalId: "espn-final-1",
           status: "final",
-          homeTeam: { externalId: "1", displayName: "Home Team", logoUrl: null, color: null },
-          awayTeam: { externalId: "2", displayName: "Away Team", logoUrl: null, color: null },
+          homeTeam: { externalId: "1", displayName: "Home Team", logoUrl: null, color: null, flagUrl: null },
+          awayTeam: { externalId: "2", displayName: "Away Team", logoUrl: null, color: null, flagUrl: null },
         }),
       ],
     });

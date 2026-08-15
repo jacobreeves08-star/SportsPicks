@@ -150,6 +150,8 @@ export function SlateScreen() {
                         awayTeam: game.awayTeam,
                         homeTeamLogoUrl: game.homeTeamLogoUrl,
                         awayTeamLogoUrl: game.awayTeamLogoUrl,
+                        homeTeamFlagUrl: game.homeTeamFlagUrl,
+                        awayTeamFlagUrl: game.awayTeamFlagUrl,
                         homeTeamColor: game.homeTeamColor,
                         awayTeamColor: game.awayTeamColor,
                         allowsDraw: game.allowsDraw,

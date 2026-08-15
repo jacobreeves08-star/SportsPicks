@@ -138,6 +138,14 @@ export function PickControl({ teams, state, onSelect, remainingMs, className }: 
           const isWinner = state.status === "final" && team === state.winningTeam;
           const logoUrl =
             team === teams.homeTeam ? teams.homeTeamLogoUrl : team === teams.awayTeam ? teams.awayTeamLogoUrl : null;
+          const flagUrl =
+            team === teams.homeTeam ? teams.homeTeamFlagUrl : team === teams.awayTeam ? teams.awayTeamFlagUrl : null;
+          // Crest first, country flag only as the fallback — an
+          // individual-sport competitor (MMA, tennis) is a person and
+          // has no crest, so the flag is the only badge available for
+          // that side. DRAW matches neither side and stays imageless,
+          // which is why this can't be folded into the ternaries above.
+          const badgeUrl = logoUrl ?? flagUrl ?? null;
           const teamColor =
             team === teams.homeTeam ? teams.homeTeamColor : team === teams.awayTeam ? teams.awayTeamColor : null;
           // Team-colored fill only while the pick is still "live" (not
@@ -171,14 +179,14 @@ export function PickControl({ teams, state, onSelect, remainingMs, className }: 
                 isWinner && styles.sideWinner,
               )}
             >
-              {logoUrl ? (
+              {badgeUrl ? (
                 // Decorative: the label span right after it already
                 // announces the team name, so a redundant alt would
                 // double-announce to a screen reader. Broken/expired
                 // CDN URLs just disappear rather than showing a
                 // browser's broken-image icon.
                 <img
-                  src={logoUrl}
+                  src={badgeUrl}
                   alt=""
                   aria-hidden="true"
                   className={styles.sideLogo}
