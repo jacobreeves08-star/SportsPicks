@@ -11,6 +11,12 @@ const fixturesDir = join(dirname(fileURLToPath(import.meta.url)), "__fixtures__/
 // object for at all, which is the whole reason that field is optional.
 const rosterFixture: unknown = JSON.parse(readFileSync(join(fixturesDir, "nfl-roster.json"), "utf8"));
 
+// A REAL, trimmed depth chart for the same team (captured live). Its
+// wr2 slot lists Xavier Worthy first and Cyrus Allen second — both of
+// whom are in the roster fixture, so the starter/backup distinction
+// is exercised end to end.
+const depthChartFixture: unknown = JSON.parse(readFileSync(join(fixturesDir, "nfl-depthchart.json"), "utf8"));
+
 const teamsFixture = {
   sports: [{ leagues: [{ teams: [{ team: { id: "12" } }] }] }],
 };
@@ -21,15 +27,16 @@ function newProvider(): EspnNflAthleteProvider {
   return new EspnNflAthleteProvider(undefined, { sleepFn: instantSleep });
 }
 
-/** Answers the `/teams` call with the teams fixture and any
- * `/teams/:id/roster` call with the roster fixture. */
-function stubEspn(roster: unknown = rosterFixture, teams: unknown = teamsFixture) {
+/** Answers the `/teams` call with the teams fixture, `/depthcharts`
+ * with the depth chart fixture, and `/teams/:id/roster` with the
+ * roster fixture. */
+function stubEspn(roster: unknown = rosterFixture, teams: unknown = teamsFixture, depthChart: unknown = depthChartFixture) {
   vi.stubGlobal(
     "fetch",
     vi.fn(async (url: string) => ({
       ok: true,
       status: 200,
-      json: async () => (url.includes("/roster") ? roster : teams),
+      json: async () => (url.includes("/depthcharts") ? depthChart : url.includes("/roster") ? roster : teams),
     })),
   );
 }
@@ -64,6 +71,7 @@ describe("MockNflAthleteProvider", () => {
         collegeLogoUrl: null,
         rosterStatus: "active",
         experienceYears: 3,
+        isStarter: true,
       },
     ]).fetchAthletes();
 
@@ -90,6 +98,43 @@ describe("EspnNflAthleteProvider", () => {
       experienceYears: 0,
     });
     expect(cyrus!.headshotUrl).toContain("headshots/nfl");
+  });
+
+  it("flags an athlete listed first in a depth-chart slot as a starter, and one listed second as not", async () => {
+    stubEspn();
+
+    const athletes = await newProvider().fetchAthletes();
+
+    // wr2 in the depth chart fixture: Worthy first, Allen second.
+    expect(athletes.find((a) => a.displayName === "Xavier Worthy")!.isStarter).toBe(true);
+    expect(athletes.find((a) => a.displayName === "Cyrus Allen")!.isStarter).toBe(false);
+  });
+
+  it("marks a whole team's starter flags UNKNOWN (null), not false, when the depth chart is unreachable", async () => {
+    // Demoting every starter on a team to a backup because one
+    // optional request failed would quietly degrade the quiz for a
+    // week — null lets the ingest keep the values it already has.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (url.includes("/depthcharts")) return { ok: false, status: 500, json: async () => ({}) };
+        return { ok: true, status: 200, json: async () => (url.includes("/roster") ? rosterFixture : teamsFixture) };
+      }),
+    );
+
+    const athletes = await newProvider().fetchAthletes();
+
+    expect(athletes.length).toBeGreaterThan(0);
+    expect(athletes.every((a) => a.isStarter === null)).toBe(true);
+  });
+
+  it("treats a depth chart that changed shape like an unreachable one", async () => {
+    stubEspn(rosterFixture, teamsFixture, { unexpected: "shape" });
+
+    const athletes = await newProvider().fetchAthletes();
+
+    expect(athletes.length).toBeGreaterThan(0);
+    expect(athletes.every((a) => a.isStarter === null)).toBe(true);
   });
 
   it("DROPS an athlete ESPN gives no college for, rather than storing a null", async () => {
@@ -120,7 +165,8 @@ describe("EspnNflAthleteProvider", () => {
 
     const athletes = await newProvider().fetchAthletes();
 
-    expect(athletes[0]!.collegeLogoUrl).toBe("https://a.espncdn.com/i/teamlogos/ncaa/500/2132.png");
+    const cyrus = athletes.find((a) => a.displayName === "Cyrus Allen");
+    expect(cyrus!.collegeLogoUrl).toBe("https://a.espncdn.com/i/teamlogos/ncaa/500/2132.png");
   });
 
   it("returns zero athletes rather than throwing when the teams response changes shape", async () => {

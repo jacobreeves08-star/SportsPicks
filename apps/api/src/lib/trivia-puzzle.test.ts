@@ -152,7 +152,7 @@ describe("getOrCreatePuzzle", () => {
 
   it("prefers active-roster players over practice-squad ones", async () => {
     for (let i = 0; i < 6; i++) {
-      await createTestNflAthlete({ rosterStatus: "active", displayName: `Starter ${i}` });
+      await createTestNflAthlete({ rosterStatus: "active", displayName: `Active ${i}` });
     }
     for (let i = 0; i < 6; i++) {
       await createTestNflAthlete({ rosterStatus: "practice_squad", displayName: `Scrub ${i}` });
@@ -160,7 +160,39 @@ describe("getOrCreatePuzzle", () => {
 
     const puzzle = await getOrCreatePuzzle("2026-08-10");
 
-    expect(puzzle.questions.every((q) => q.athlete.displayName.startsWith("Starter"))).toBe(true);
+    expect(puzzle.questions.every((q) => q.athlete.displayName.startsWith("Active"))).toBe(true);
+  });
+
+  it("prefers depth-chart starters over active backups at the same positions", async () => {
+    // Both groups are active skill-position players — the ONLY
+    // difference is the depth-chart flag. This is the fix for "the
+    // quiz picked players nobody has heard of": a third-string RB and
+    // a franchise QB both match active+skill, only one is a starter.
+    for (let i = 0; i < 6; i++) {
+      await createTestNflAthlete({ isStarter: true, displayName: `Household Name ${i}` });
+    }
+    for (let i = 0; i < 6; i++) {
+      await createTestNflAthlete({ isStarter: false, displayName: `Backup ${i}` });
+    }
+
+    const puzzle = await getOrCreatePuzzle("2026-08-10");
+
+    expect(puzzle.questions.every((q) => q.athlete.displayName.startsWith("Household Name"))).toBe(true);
+  });
+
+  it("no longer treats kickers as a preferred position", async () => {
+    // Even starting kickers are obscure outside a couple of names —
+    // active WR backups should beat active starting kickers.
+    for (let i = 0; i < 6; i++) {
+      await createTestNflAthlete({ positionAbbreviation: "K", isStarter: true, displayName: `Kicker ${i}` });
+    }
+    for (let i = 0; i < 6; i++) {
+      await createTestNflAthlete({ positionAbbreviation: "WR", isStarter: false, displayName: `Receiver ${i}` });
+    }
+
+    const puzzle = await getOrCreatePuzzle("2026-08-10");
+
+    expect(puzzle.questions.every((q) => q.athlete.displayName.startsWith("Receiver"))).toBe(true);
   });
 
   it("falls back to non-skill positions rather than serving fewer than five questions", async () => {

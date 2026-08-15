@@ -8,6 +8,40 @@
       "position": "offense",
       "items": [
         {
+          "id": "4683062",
+          "displayName": "Xavier Worthy",
+          "jersey": "1",
+          "college": {
+            "id": "251",
+            "name": "Texas",
+            "logos": [
+              {
+                "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/251.png",
+                "rel": [
+                  "full",
+                  "default"
+                ]
+              },
+              {
+                "href": "https://a.espncdn.com/i/teamlogos/ncaa/500-dark/251.png",
+                "rel": [
+                  "full",
+                  "dark"
+                ]
+              }
+            ]
+          },
+          "position": {
+            "abbreviation": "WR"
+          },
+          "headshot": {
+            "href": "https://a.espncdn.com/i/headshots/nfl/players/full/4683062.png"
+          },
+          "experience": {
+            "years": 3
+          }
+        },
+        {
           "id": "4912218",
           "displayName": "Cyrus Allen",
           "jersey": "13",

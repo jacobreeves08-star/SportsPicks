@@ -53,6 +53,11 @@ export async function runNflAthleteIngest(providerOverride?: NflAthleteProvider)
           collegeLogoUrl: athlete.collegeLogoUrl,
           rosterStatus: athlete.rosterStatus,
           experienceYears: athlete.experienceYears,
+          // null means "depth chart unavailable this run", and a brand-
+          // new athlete has no previous value to keep — false is the
+          // honest default until a successful depth-chart fetch says
+          // otherwise.
+          isStarter: athlete.isStarter ?? false,
         })
         .onConflictDoUpdate({
           target: nflAthlete.externalId,
@@ -68,6 +73,12 @@ export async function runNflAthleteIngest(providerOverride?: NflAthleteProvider)
             collegeLogoUrl: sql`excluded.college_logo_url`,
             rosterStatus: sql`excluded.roster_status`,
             experienceYears: sql`excluded.experience_years`,
+            // On a run where the team's depth chart couldn't be
+            // fetched (isStarter null), KEEP the stored flag rather
+            // than writing the false the insert path had to fall back
+            // to — one failed optional request must not demote a whole
+            // team of starters.
+            isStarter: athlete.isStarter === null ? sql`nfl_athlete.is_starter` : athlete.isStarter,
             updatedAt: new Date(),
           },
         });

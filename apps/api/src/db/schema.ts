@@ -603,6 +603,9 @@ export const nflAthlete = pgTable(
     collegeLogoUrl: text("college_logo_url"),
     rosterStatus: text("roster_status").notNull().default("active"),
     experienceYears: integer("experience_years"),
+    // Listed first in a slot of the team's ESPN depth chart. The
+    // quiz's strongest recognizability signal — see trivia-puzzle.ts.
+    isStarter: boolean("is_starter").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

@@ -17,11 +17,16 @@ Concretely:
 
 ### Question selection
 
-Candidates are drawn best-first from three tiers, each consulted only if the ones above came up short:
+Candidates are drawn best-first from four tiers, each consulted only if the ones above came up short:
 
-1. Active roster **and** a recognizable position (`QB`/`RB`/`WR`/`TE`/`K`)
-2. Active roster, any position
-3. Anyone in the pool
+1. Active roster, **depth-chart starter**, and a recognizable position (`QB`/`RB`/`WR`/`TE`)
+2. Active roster and a recognizable position
+3. Active roster, any position
+4. Anyone in the pool
+
+The starter tier is the one that answers "have people actually *heard of* this player?". Active-plus-skill-position alone kept surfacing third-stringers — a WR6 matches that filter exactly as well as a franchise quarterback — so the ingest also pulls each team's ESPN depth chart and flags every athlete listed *first* in a slot (`nfl_athlete.is_starter`, migration [`0016_athlete_starters.sql`](../apps/api/src/db/migrations/0016_athlete_starters.sql)). If a team's depth chart can't be fetched on a given run, the flag is left as it was rather than demoting the whole team; the roster fetch alone never clears it.
+
+Kickers were dropped from the recognizable positions entirely: outside a couple of names, even a starting kicker is obscure. They remain reachable through the any-active tier.
 
 A quiz made of practice-squad long snappers is technically valid and completely unplayable, hence the preference — but a thin pool degrades to a *harder* quiz rather than to no quiz. Players used in the last 30 days are avoided, and that avoidance is never allowed to be the reason a puzzle comes up short.
 
@@ -101,7 +106,7 @@ The URL is escaped on its way into the HTML flavor. It's app-composed from `wind
 
 ## Player data
 
-Ingested from ESPN's per-team NFL roster endpoint by [`nfl-athlete-ingest`](../apps/api/src/jobs/nfl-athlete-ingest.ts) — `/teams` for the 32 ids, then `/teams/{id}/roster` for each. Confirmed live: the roster response embeds the full athlete object including `college`, so ~33 requests get the whole league. The obvious-looking alternative (`sports.core.api.espn.com/.../athletes`) returns a page of `$ref` URLs whose college has to be dereferenced one athlete at a time — thousands of requests for the same data. Same reasoning as [`adr/0003-sports-data-pipeline.md`](./adr/0003-sports-data-pipeline.md).
+Ingested from ESPN's per-team NFL roster endpoint by [`nfl-athlete-ingest`](../apps/api/src/jobs/nfl-athlete-ingest.ts) — `/teams` for the 32 ids, then `/teams/{id}/roster` and `/teams/{id}/depthcharts` for each (the latter solely for the starter flag). Confirmed live: the roster response embeds the full athlete object including `college`, so ~65 requests get the whole league. The obvious-looking alternative (`sports.core.api.espn.com/.../athletes`) returns a page of `$ref` URLs whose college has to be dereferenced one athlete at a time — thousands of requests for the same data. Same reasoning as [`adr/0003-sports-data-pipeline.md`](./adr/0003-sports-data-pipeline.md).
 
 A real run yields ~2,970 athletes across ~260 distinct colleges.
 

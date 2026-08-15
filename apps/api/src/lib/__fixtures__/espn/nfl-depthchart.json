@@ -1,0 +1,35 @@
+{
+  "team": { "id": "12", "displayName": "Kansas City Chiefs" },
+  "depthchart": [
+    {
+      "name": "3WR 1TE",
+      "positions": {
+        "qb": {
+          "athletes": [
+            { "id": "3139477", "displayName": "Patrick Mahomes" },
+            { "id": "4362887", "displayName": "Justin Fields" },
+            { "id": "4567747", "displayName": "Garrett Nussmeier" },
+            { "id": "4044111", "displayName": "Chris Oladokun" }
+          ]
+        },
+        "wr2": {
+          "athletes": [
+            { "id": "4683062", "displayName": "Xavier Worthy" },
+            { "id": "4912218", "displayName": "Cyrus Allen" },
+            { "id": "4689988", "displayName": "Jason Brownlee" },
+            { "id": "5155179", "displayName": "Jacob De Jesus" },
+            { "id": "5082601", "displayName": "Jeff Weimer" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Special Teams",
+      "positions": {
+        "pk": {
+          "athletes": [{ "id": "3055899", "displayName": "Harrison Butker" }]
+        }
+      }
+    }
+  ]
+}

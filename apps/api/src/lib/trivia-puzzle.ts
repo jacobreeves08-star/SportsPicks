@@ -56,8 +56,13 @@ export const OPTIONS_PER_QUESTION = 5;
  * technically valid and completely unplayable. Not a hard filter: the
  * fallback below will happily use anyone rather than serve fewer than
  * five questions.
+ *
+ * Kickers are deliberately NOT here. They were originally, but outside
+ * of two or three names even a STARTING kicker is obscure, and the
+ * whole point of the preferred tiers is "players people have heard
+ * of". They remain reachable through the any-active fallback tier.
  */
-const SKILL_POSITIONS = ["QB", "RB", "WR", "TE", "K"];
+const SKILL_POSITIONS = ["QB", "RB", "WR", "TE"];
 
 /**
  * How far back to look when avoiding repeats. Purely cosmetic — the
@@ -150,10 +155,17 @@ export function buildOptions(
 }
 
 /**
- * Candidate athletes for one puzzle, best-first: active roster and a
- * recognizable position, then active anyone, then literally anyone.
- * Each tier is only consulted if the tiers above it came up short, so
- * a thin pool degrades to a harder quiz rather than to no quiz.
+ * Candidate athletes for one puzzle, best-first: depth-chart starters
+ * at a recognizable position, then active roster at a recognizable
+ * position, then active anyone, then literally anyone. Each tier is
+ * only consulted if the tiers above it came up short, so a thin pool
+ * degrades to a harder quiz rather than to no quiz.
+ *
+ * The starter tier exists because "active + skill position" alone
+ * kept surfacing players nobody outside one fanbase has heard of — a
+ * third-string RB matches that filter exactly as well as a franchise
+ * QB. Being listed first in a depth-chart slot is the signal that
+ * actually tracks recognizability (see nfl-athlete-provider.ts).
  */
 async function pickAthletes(date: string, random: () => number): Promise<PuzzleAthlete[]> {
   const recentlyUsed = await recentlyUsedAthleteIds(date);
@@ -169,6 +181,11 @@ async function pickAthletes(date: string, random: () => number): Promise<PuzzleA
   };
 
   const tiers = [
+    and(
+      eq(nflAthlete.rosterStatus, "active"),
+      eq(nflAthlete.isStarter, true),
+      inArray(nflAthlete.positionAbbreviation, SKILL_POSITIONS),
+    ),
     and(eq(nflAthlete.rosterStatus, "active"), inArray(nflAthlete.positionAbbreviation, SKILL_POSITIONS)),
     eq(nflAthlete.rosterStatus, "active"),
     undefined,

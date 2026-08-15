@@ -11,15 +11,24 @@ import { HttpError, withRetry, type RetryOptions } from "./retry.js";
  * It exists solely to fill the player pool the daily college quiz
  * draws from (docs/college-trivia.md).
  *
- * Two calls per run shape, not one: `/teams` for the 32 team ids, then
- * `/teams/{id}/roster` for each. Confirmed live against the real API —
- * the per-team roster response embeds the FULL athlete object
- * (`displayName`, `position`, `headshot`, AND `college`), so ~33
- * requests get the entire league. The obvious-looking alternative
+ * Three calls per team shape, not one: `/teams` for the 32 team ids,
+ * then `/teams/{id}/roster` and `/teams/{id}/depthcharts` for each.
+ * Confirmed live against the real API — the per-team roster response
+ * embeds the FULL athlete object (`displayName`, `position`,
+ * `headshot`, AND `college`), so ~65 requests get the entire league.
+ * The obvious-looking alternative
  * (`sports.core.api.espn.com/.../athletes`) returns a page of `$ref`
  * URLs whose college has to be dereferenced one athlete at a time —
  * thousands of requests for the same data. Same reason golf-provider
  * uses the site API rather than the core one.
+ *
+ * The depth chart exists for exactly one field: `isStarter`, the
+ * quiz's recognizability signal (an athlete listed first in a slot).
+ * Confirmed live: the site-API depth chart response is an array of
+ * formation entries ("3WR 1TE" / "Base 4-3 D" / "Special Teams"),
+ * each with `positions` keyed by slot (`qb`, `wr1`, `wr2`, ...), each
+ * slot listing its athletes in depth order with ids that match the
+ * roster response's athlete ids.
  *
  * Provider field names never cross the boundary out of this file —
  * everything else in the app only ever sees `CanonicalNflAthlete`.
@@ -44,6 +53,12 @@ export interface CanonicalNflAthlete {
   collegeLogoUrl: string | null;
   rosterStatus: RosterStatus;
   experienceYears: number | null;
+  // Listed FIRST in a slot of the team's depth chart. Three-valued on
+  // purpose: `null` means "this team's depth chart couldn't be fetched
+  // or parsed this run", and the ingest keeps whatever value it
+  // already had rather than silently demoting a whole team of
+  // starters to backups over one failed request.
+  isStarter: boolean | null;
 }
 
 export interface NflAthleteProvider {
@@ -94,6 +109,24 @@ const espnRosterResponseSchema = z.object({
   athletes: z.array(espnRosterGroupSchema).default([]),
 });
 
+const espnDepthChartResponseSchema = z.object({
+  // One entry per formation ("3WR 1TE", "Base 4-3 D", "Special
+  // Teams"); `positions` is keyed by slot name (`qb`, `wr1`, ...).
+  // NO `.default([])` here, unlike the roster schema's `athletes`: a
+  // response missing the key entirely means ESPN changed shape, and
+  // it must FAIL parsing (-> isStarter null, stored flags kept), not
+  // read as "this team has an empty depth chart" (-> everyone false).
+  depthchart: z.array(
+    z.object({
+      positions: z.record(
+        z.object({
+          athletes: z.array(z.object({ id: z.string() })).default([]),
+        }),
+      ),
+    }),
+  ),
+});
+
 /**
  * ESPN's roster GROUP key -> our `roster_status`. The groups are
  * positional ("offense"/"defense"/"specialTeam") for everyone on the
@@ -117,7 +150,34 @@ function pickCollegeLogo(college: z.infer<typeof espnCollegeSchema>): string | n
   return preferred?.href ?? null;
 }
 
-export function mapRosterToAthletes(roster: z.infer<typeof espnRosterResponseSchema>): CanonicalNflAthlete[] {
+/**
+ * The FIRST-listed athlete of every depth-chart slot, across every
+ * formation. Every slot, not just offense: which positions the quiz
+ * finds recognizable is trivia-puzzle.ts's call (it filters by
+ * position there), and a starter flag that only exists for some
+ * positions would bake that decision into the wrong layer.
+ *
+ * Slots are per-formation, so wr1/wr2/wr3 each contribute their own
+ * starter — that's the point, a team genuinely has three starting
+ * receivers.
+ */
+export function extractStarterIds(depthChart: z.infer<typeof espnDepthChartResponseSchema>): Set<string> {
+  const ids = new Set<string>();
+  for (const formation of depthChart.depthchart) {
+    for (const slot of Object.values(formation.positions)) {
+      const first = slot.athletes[0];
+      if (first) ids.add(first.id);
+    }
+  }
+  return ids;
+}
+
+export function mapRosterToAthletes(
+  roster: z.infer<typeof espnRosterResponseSchema>,
+  // null = "no depth chart this run": every athlete gets isStarter
+  // null (unknown) rather than false (demoted). See CanonicalNflAthlete.
+  starterIds: ReadonlySet<string> | null,
+): CanonicalNflAthlete[] {
   const athletes: CanonicalNflAthlete[] = [];
 
   for (const group of roster.athletes) {
@@ -145,6 +205,7 @@ export function mapRosterToAthletes(roster: z.infer<typeof espnRosterResponseSch
         collegeLogoUrl: pickCollegeLogo(a.college),
         rosterStatus: toRosterStatus(group.position),
         experienceYears: a.experience?.years ?? null,
+        isStarter: starterIds ? starterIds.has(a.id) : null,
       });
     }
   }
@@ -176,14 +237,15 @@ export class EspnNflAthleteProvider implements NflAthleteProvider {
     const teamIds = await this.fetchTeamIds();
     const athletes: CanonicalNflAthlete[] = [];
 
-    // Sequential, not Promise.all: 32 requests fired at once at an
+    // Sequential, not Promise.all: 64 requests fired at once at an
     // undocumented free endpoint is exactly the shape that gets an
     // IP throttled, and this job runs on a weekly cron where latency
     // is worth nothing. Same restraint as schedule-ingest's per-sport
     // loop.
     for (const teamId of teamIds) {
       try {
-        athletes.push(...(await this.fetchTeamRoster(teamId)));
+        const starterIds = await this.fetchTeamStarterIds(teamId);
+        athletes.push(...(await this.fetchTeamRoster(teamId, starterIds)));
       } catch (err) {
         // One unreachable team costs 1/32nd of the pool, not the whole
         // run — the pool is additive and upserted, so the previous
@@ -212,7 +274,7 @@ export class EspnNflAthleteProvider implements NflAthleteProvider {
     return parsed.data.sports.flatMap((s) => s.leagues.flatMap((l) => l.teams.map((t) => t.team.id)));
   }
 
-  private async fetchTeamRoster(teamId: string): Promise<CanonicalNflAthlete[]> {
+  private async fetchTeamRoster(teamId: string, starterIds: ReadonlySet<string> | null): Promise<CanonicalNflAthlete[]> {
     const rawJson: unknown = await withRetry(async () => {
       const url = `${this.baseUrl}/teams/${teamId}/roster`;
       const res = await fetch(url);
@@ -226,7 +288,37 @@ export class EspnNflAthleteProvider implements NflAthleteProvider {
       return [];
     }
 
-    return mapRosterToAthletes(parsed.data);
+    return mapRosterToAthletes(parsed.data, starterIds);
+  }
+
+  /**
+   * `null`, never a throw, on any failure — the roster is the load-
+   * bearing fetch and a missing depth chart must not cost a team's
+   * athletes. A null propagates through `mapRosterToAthletes` as
+   * `isStarter: null` ("unknown"), which the ingest treats as "keep
+   * the value you already have".
+   */
+  private async fetchTeamStarterIds(teamId: string): Promise<Set<string> | null> {
+    let rawJson: unknown;
+    try {
+      rawJson = await withRetry(async () => {
+        const url = `${this.baseUrl}/teams/${teamId}/depthcharts`;
+        const res = await fetch(url);
+        if (!res.ok) throw new HttpError(`ESPN NFL depth chart request failed: ${res.status} ${url}`, res.status);
+        return res.json();
+      }, this.retryOptions);
+    } catch (err) {
+      logger.warn({ teamId, err }, "espn nfl: depth chart fetch failed, keeping stored starter flags");
+      return null;
+    }
+
+    const parsed = espnDepthChartResponseSchema.safeParse(rawJson);
+    if (!parsed.success) {
+      logger.warn({ teamId }, "espn nfl: depth chart response failed schema validation, keeping stored starter flags");
+      return null;
+    }
+
+    return extractStarterIds(parsed.data);
   }
 }
 

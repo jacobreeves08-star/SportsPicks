@@ -24,6 +24,7 @@ function athlete(overrides: Partial<CanonicalNflAthlete> = {}): CanonicalNflAthl
     collegeLogoUrl: "https://example.test/logo.png",
     rosterStatus: "active",
     experienceYears: 8,
+    isStarter: true,
     ...overrides,
   };
 }
@@ -65,6 +66,33 @@ describe("runNflAthleteIngest", () => {
       teamDisplayName: "Test Broncos",
       jersey: "3",
     });
+  });
+
+  it("demotes a benched starter on re-ingest, when the depth chart was actually fetched", async () => {
+    await runNflAthleteIngest(new MockNflAthleteProvider([athlete({ isStarter: true })]));
+    await runNflAthleteIngest(new MockNflAthleteProvider([athlete({ isStarter: false })]));
+
+    const [row] = await db.select().from(nflAthlete).where(eq(nflAthlete.externalId, "espn-1"));
+    expect(row!.isStarter).toBe(false);
+  });
+
+  it("KEEPS the stored starter flag when a run's depth chart was unavailable (isStarter null)", async () => {
+    await runNflAthleteIngest(new MockNflAthleteProvider([athlete({ isStarter: true })]));
+
+    // Next week: roster fetch succeeded, depth chart didn't. The
+    // athlete must stay a starter — one failed optional request must
+    // not demote him.
+    await runNflAthleteIngest(new MockNflAthleteProvider([athlete({ isStarter: null })]));
+
+    const [row] = await db.select().from(nflAthlete).where(eq(nflAthlete.externalId, "espn-1"));
+    expect(row!.isStarter).toBe(true);
+  });
+
+  it("defaults a brand-new athlete with an unknown starter flag to false", async () => {
+    await runNflAthleteIngest(new MockNflAthleteProvider([athlete({ isStarter: null })]));
+
+    const [row] = await db.select().from(nflAthlete).where(eq(nflAthlete.externalId, "espn-1"));
+    expect(row!.isStarter).toBe(false);
   });
 
   it("never deletes an athlete the provider stopped returning — past puzzles reference them", async () => {
