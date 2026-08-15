@@ -49,7 +49,7 @@ The cron services deliberately don't run migrations — they share the database 
 
 ## The college quiz's player pool
 
-Same constraint, same shape of answer. `nfl-athlete-ingest` is designed to run weekly as a cron service, but the free instance has no cron, so `lib/ensure-player-pool.ts` runs it once at startup **if the pool is completely empty** — fire-and-forget, after the port is open, with every failure swallowed and logged. It refreshes nothing and tops up nothing; one row is enough to skip it. A stale pool is fully playable, since a player's college never changes.
+Same constraint, same shape of answer. `nfl-athlete-ingest` is designed to run weekly as a cron service, but the free instance has no cron, so `lib/ensure-player-pool.ts` runs it once at startup in two self-disabling cases — **the pool is completely empty**, or **rows exist but none is flagged a depth-chart starter** (a pool ingested before migration `0016_athlete_starters.sql`, which nothing else on a cron-less instance would ever backfill) — fire-and-forget, after the port is open, with every failure swallowed and logged. It refreshes nothing and tops up nothing otherwise. A stale pool is fully playable, since a player's college never changes.
 
 This needs `SPORTS_API_PROVIDER=live` in the environment. Under the `mock` default the provider returns an empty list, the pool stays empty, and the quiz correctly reports `TRIVIA_UNAVAILABLE` forever.
 

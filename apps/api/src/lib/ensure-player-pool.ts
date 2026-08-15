@@ -6,8 +6,9 @@ import { captureException } from "./error-tracking.js";
 import { logger } from "./logger.js";
 
 /**
- * Loads the college quiz's player pool on boot if — and only if — it is
- * completely empty (docs/college-trivia.md).
+ * Loads the college quiz's player pool on boot if — and only if — it
+ * is missing something no other mechanism will ever supply
+ * (docs/college-trivia.md).
  *
  * A safety net for one specific situation: an environment where
  * `nfl-athlete-ingest` has never run and has no way to. The job is
@@ -17,14 +18,21 @@ import { logger } from "./logger.js";
  * with no players is the whole feature failing to exist.
  *
  * Deliberately narrow, so this never becomes a second, accidental
- * scheduler competing with the real job:
+ * scheduler competing with the real job. It runs in exactly two
+ * self-disabling cases, and refreshes nothing otherwise:
  *
- *  - **Empty means empty.** One row is enough to skip. This tops up
- *    nothing and refreshes nothing; a stale pool is fully playable (a
- *    player's college never changes), so there is nothing here worth
- *    re-fetching on a restart.
+ *  - **The pool is completely empty.** One row is enough to skip. A
+ *    stale pool is fully playable (a player's college never changes),
+ *    so there is nothing here worth re-fetching on a restart.
+ *  - **The pool predates the starter flag.** Rows exist but not one is
+ *    a depth-chart starter, which is not a state a real league can be
+ *    in — it means the pool was ingested before `is_starter` existed
+ *    (migration 0016), and without this run the flag would stay false
+ *    on a cron-less instance FOREVER, quietly keeping the quiz on
+ *    third-stringers. The moment one starter lands, this branch never
+ *    fires again.
  *  - **Never blocks startup.** Called after `listen`, not before, and
- *    not awaited. A full ingest is ~33 upstream requests and takes
+ *    not awaited. A full ingest is ~65 upstream requests and takes
  *    minutes; doing it before the port opens would fail the platform's
  *    health check and turn a slow ESPN into a failed deploy.
  *  - **Never takes the API down.** Every failure is logged and reported
@@ -34,11 +42,26 @@ import { logger } from "./logger.js";
  */
 export async function ensurePlayerPool(): Promise<void> {
   try {
-    const [row] = await db.select({ count: sql<number>`count(*)::int` }).from(nflAthlete);
+    const [row] = await db
+      .select({
+        count: sql<number>`count(*)::int`,
+        starterCount: sql<number>`count(*) filter (where ${nflAthlete.isStarter})::int`,
+      })
+      .from(nflAthlete);
 
-    if ((row?.count ?? 0) > 0) return;
+    const poolCount = row?.count ?? 0;
+    const starterCount = row?.starterCount ?? 0;
 
-    logger.warn({ job: "nfl-athlete-ingest" }, "player pool is empty — running the ingest once at startup");
+    if (poolCount > 0 && starterCount > 0) return;
+
+    if (poolCount === 0) {
+      logger.warn({ job: "nfl-athlete-ingest" }, "player pool is empty — running the ingest once at startup");
+    } else {
+      logger.warn(
+        { job: "nfl-athlete-ingest", poolCount },
+        "player pool has no depth-chart starters (ingested before is_starter existed) — running the ingest once at startup",
+      );
+    }
     await runNflAthleteIngest();
     logger.info({ job: "nfl-athlete-ingest" }, "startup player-pool ingest finished");
   } catch (err) {
