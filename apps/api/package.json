@@ -4,8 +4,9 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "build": "tsc -p tsconfig.build.json",
+    "build": "tsc -p tsconfig.build.json && node scripts/copy-migrations.mjs",
     "start": "node dist/server.js",
+    "migrate": "node dist/db/migrate.js",
     "score-poll": "node dist/jobs/score-poll.js",
     "schedule-ingest": "node dist/jobs/schedule-ingest.js",
     "golf-ingest": "node dist/jobs/golf-ingest.js",

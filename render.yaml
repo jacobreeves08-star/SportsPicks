@@ -12,6 +12,19 @@ services:
     branch: main
     autoDeploy: true
     buildCommand: npm install && npm run build --workspace apps/api
+    # Runs against the new build, with the new code's env, BEFORE any
+    # traffic is shifted to it — and a non-zero exit aborts the deploy,
+    # leaving the previous version serving. Nothing ran migrations here
+    # before this, which is how the college quiz shipped to a database
+    # with no `trivia_*` tables and returned a 500 to every visitor.
+    # `npm run migrate` (compiled), NOT `db:migrate` (tsx): tsx is a
+    # devDependency and this service builds with NODE_ENV=production, so
+    # it isn't installed. See apps/api/scripts/copy-migrations.mjs for
+    # why the .sql files have to be copied into dist for this to work.
+    #
+    # Only the two web services do this — the cron services share the
+    # same database and would just race each other to no purpose.
+    preDeployCommand: npm run migrate --workspace apps/api
     startCommand: npm run start --workspace apps/api
     healthCheckPath: /health
     envVars:
@@ -266,6 +279,11 @@ services:
     branch: main
     autoDeploy: false # manual promotion only, after verifying staging
     buildCommand: npm install && npm run build --workspace apps/api
+    # See the staging service above for why this exists and why it's the
+    # compiled runner. Prod is promoted manually, so this runs at promote
+    # time — the same commit having already migrated staging successfully
+    # is most of what promotion is verifying.
+    preDeployCommand: npm run migrate --workspace apps/api
     startCommand: npm run start --workspace apps/api
     healthCheckPath: /health
     envVars:

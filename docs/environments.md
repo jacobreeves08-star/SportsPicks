@@ -32,6 +32,19 @@ Three environments, each with its own database and credentials — never shared.
 4. In the Render dashboard, set `RESEND_API_KEY` and `EMAIL_FROM_ADDRESS` (e.g. `"Sports Pick'em <noreply@yourdomain.com>"`) on both `sports-pickem-api-staging` and `sports-pickem-api-prod` — these are `sync: false` in `render.yaml`, so they only ever live in Render's dashboard, never in the repo. The two anonymize/score-poll cron services don't need these — they don't send email.
 5. Verify staging first (trigger a signup against staging, confirm the email actually arrives) before considering prod ready.
 
+## Database migrations
+
+Applied automatically on every deploy of the two web services, via `preDeployCommand: npm run migrate --workspace apps/api` in `render.yaml`. Render runs it against the newly built code, with that service's env, *before* shifting any traffic to it; a non-zero exit aborts the deploy and leaves the previous version serving. So a migration and the code that needs it always land together, and a broken migration never half-deploys.
+
+Two things about that command that are easy to get wrong:
+
+- It's `migrate` (`node dist/db/migrate.js`), **not** `db:migrate` (`tsx src/db/migrate.ts`). `tsx` is a devDependency and these services build with `NODE_ENV=production`, so it isn't installed there. `db:migrate` remains the right command locally and in CI.
+- `tsc` copies no `.sql` files, so `apps/api/scripts/copy-migrations.mjs` copies `src/db/migrations` into `dist/db/migrations` as the last step of the build. Without it the compiled runner finds no migrations directory at all.
+
+The cron services deliberately don't run migrations — they share the database with the web service and would only race it.
+
+This was added after the daily college quiz shipped to a database with no `trivia_*` tables: nothing in the pipeline had ever run migrations, and every earlier one happened to have been applied by hand.
+
 ## Setting `PUBLIC_API_URL`
 
 Used to build absolute links in emails (verification, password reset). This is a chicken-and-egg value — you don't know the real deployed URL until after the first deploy. Deploy first with the default (`http://localhost:3000`, harmless since email isn't live yet without `RESEND_API_KEY`), then once Render assigns the real staging/prod URLs, set `PUBLIC_API_URL` to each (`sync: false`) in the dashboard and redeploy.
