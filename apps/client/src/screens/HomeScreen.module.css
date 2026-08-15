@@ -56,3 +56,33 @@
   outline: 2px solid var(--color-focus-ring);
   outline-offset: 2px;
 }
+
+/* The daily-quiz CTA. Solid lime fill rather than the wash used by
+   .headerLink/.actionLink — those sit among several equal-weight
+   links, whereas this is the single action on its own card. */
+.quizLink {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: var(--space-2) var(--space-5);
+  border-radius: var(--radius-full);
+  background-color: var(--color-pick-mine);
+  /* Near-black on the lime fill, same rule as every primary button. */
+  color: var(--color-surface);
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  font-size: 14px;
+  text-decoration: none;
+  transition: background-color var(--motion-duration-fast) var(--motion-ease);
+}
+
+.quizLink:hover {
+  background-color: #bfe600;
+}
+
+.quizLink:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}

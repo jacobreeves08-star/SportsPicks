@@ -97,20 +97,26 @@ export function HomeScreen() {
 
   if (leagues.length === 0) {
     return (
-      <EmptyState
-        title="No leagues yet"
-        description="Create a league or join one with an invite code to get started."
-        action={
-          <Stack direction="row" gap={2}>
-            <Link to="/leagues/new" className={styles.actionLink}>
-              Create a league
-            </Link>
-            <Link to="/join" className={styles.actionLink}>
-              Join a league
-            </Link>
-          </Stack>
-        }
-      />
+      <Stack gap={4}>
+        <EmptyState
+          title="No leagues yet"
+          description="Create a league or join one with an invite code to get started."
+          action={
+            <Stack direction="row" gap={2}>
+              <Link to="/leagues/new" className={styles.actionLink}>
+                Create a league
+              </Link>
+              <Link to="/join" className={styles.actionLink}>
+                Join a league
+              </Link>
+            </Stack>
+          }
+        />
+        {/* Still offered with zero leagues — the quiz needs no league
+            at all, and it's the one thing a brand-new account can
+            actually do on day one. */}
+        <CollegeQuizCard />
+      </Stack>
     );
   }
 
@@ -134,6 +140,37 @@ export function HomeScreen() {
           <LeagueRow key={league.id} league={league} now={now} />
         ))}
       </Stack>
+      <CollegeQuizCard />
     </Stack>
+  );
+}
+
+/**
+ * The feature brief's SECOND trigger — "after login, by clicking a
+ * button". Below the leagues list, not above it: this screen's stated
+ * job is the unpicked-count retention loop (see the doc comment
+ * above), and a daily side game must not outrank a slate that's about
+ * to lock.
+ *
+ * Links to the same public `/college-quiz` route the logged-out home
+ * page points at, rather than an authenticated duplicate — one screen,
+ * one URL, and the round is tracked automatically because the caller
+ * happens to have a session (see screens/trivia/CollegeQuizScreen.tsx).
+ */
+function CollegeQuizCard() {
+  return (
+    <Surface variant="raised" radius="lg" padding={4} as="section">
+      <Stack direction="row" justify="between" align="center" gap={3} wrap>
+        <Stack gap={1}>
+          <Text weight="bold">Today&rsquo;s College Quiz</Text>
+          <Text size="sm" color="dim">
+            Five NFL players. Which college did each one go to?
+          </Text>
+        </Stack>
+        <Link to="/college-quiz" className={styles.quizLink}>
+          Play
+        </Link>
+      </Stack>
+    </Surface>
   );
 }

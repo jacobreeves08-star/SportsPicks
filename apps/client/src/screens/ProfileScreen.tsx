@@ -6,6 +6,7 @@ import { AccountDeletionSection } from "./profile/AccountDeletionSection.js";
 import { EmailSection } from "./profile/EmailSection.js";
 import { PasswordSection } from "./profile/PasswordSection.js";
 import { ProfileDetailsForm } from "./profile/ProfileDetailsForm.js";
+import { TriviaStatsSection } from "./profile/TriviaStatsSection.js";
 import styles from "./ProfileScreen.module.css";
 
 /**
@@ -40,6 +41,14 @@ export function ProfileScreen() {
 
       <Surface variant="raised" radius="lg" padding={4}>
         <ProfileDetailsForm me={me} />
+      </Surface>
+
+      {/* Directly under the profile details, above the account
+          settings sections: these are ACHIEVEMENTS, the part of this
+          screen someone actually revisits, whereas email/password/
+          notifications are things you change once and forget. */}
+      <Surface variant="raised" radius="lg" padding={4}>
+        <TriviaStatsSection />
       </Surface>
 
       <Surface variant="raised" radius="lg" padding={4}>

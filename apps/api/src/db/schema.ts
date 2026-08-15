@@ -573,3 +573,138 @@ export const jobRun = pgTable(
   },
   (t) => [index("job_run_job_name_started_at_idx").on(t.jobName, t.startedAt)],
 );
+
+// --- Daily college trivia (see migrations/0015_college_trivia.sql and
+// docs/college-trivia.md) ---------------------------------------------------
+
+// The NFL player pool the daily questions are drawn from, ingested from
+// ESPN's per-team roster endpoint (lib/nfl-athlete-provider.ts). Only
+// athletes who HAVE a college are stored — a college-trivia question
+// about a player with no college is unanswerable by construction, so
+// the ingest skips them rather than writing a null.
+export const nflAthlete = pgTable(
+  "nfl_athlete",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    externalId: text("external_id").notNull().unique(),
+    displayName: text("display_name").notNull(),
+    // Feeds question selection — a quarterback is far more
+    // recognizable than a practice-squad long snapper, and a quiz
+    // nobody can answer isn't fun. See lib/trivia-puzzle.ts.
+    positionAbbreviation: text("position_abbreviation"),
+    jersey: text("jersey"),
+    headshotUrl: text("headshot_url"),
+    teamExternalId: text("team_external_id"),
+    teamDisplayName: text("team_display_name"),
+    // ESPN's `college.name` — the short form a person would say out
+    // loud ("Cincinnati", "Ohio State"), not the mascot or abbrev.
+    collegeName: text("college_name").notNull(),
+    collegeExternalId: text("college_external_id"),
+    collegeLogoUrl: text("college_logo_url"),
+    rosterStatus: text("roster_status").notNull().default("active"),
+    experienceYears: integer("experience_years"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    check(
+      "nfl_athlete_roster_status_check",
+      sql`${t.rosterStatus} in ('active', 'practice_squad', 'injured_reserve')`,
+    ),
+    index("nfl_athlete_roster_status_position_idx").on(t.rosterStatus, t.positionAbbreviation),
+    index("nfl_athlete_college_name_idx").on(t.collegeName),
+  ],
+);
+
+// One row per calendar day — the same five players for everybody, so a
+// shared "4/5" is comparable between two friends. Day boundary is a
+// fixed anchor timezone, not the caller's; see lib/trivia-puzzle.ts.
+export const triviaPuzzle = pgTable("trivia_puzzle", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  puzzleDate: date("puzzle_date").notNull().unique(),
+  // Stored, not derived at read time, so changing the epoch later can
+  // never renumber a puzzle somebody already shared.
+  puzzleNumber: integer("puzzle_number").notNull().unique(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// The five questions of one puzzle, in fixed display order.
+export const triviaQuestion = pgTable(
+  "trivia_question",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    puzzleId: uuid("puzzle_id")
+      .notNull()
+      .references(() => triviaPuzzle.id, { onDelete: "cascade" }),
+    position: integer("position").notNull(),
+    athleteId: uuid("athlete_id")
+      .notNull()
+      .references(() => nflAthlete.id),
+    // Shuffled and frozen at build time so every player sees an
+    // identical board.
+    options: text("options").array().notNull(),
+    // NEVER included in any response body — this is what makes grading
+    // a server round trip instead of something readable from the
+    // network tab. See routes/trivia.routes.ts.
+    answerIndex: integer("answer_index").notNull(),
+  },
+  (t) => [
+    check("trivia_question_position_check", sql`${t.position} between 1 and 5`),
+    check("trivia_question_options_length_check", sql`array_length(${t.options}, 1) = 5`),
+    check("trivia_question_answer_index_check", sql`${t.answerIndex} between 0 and 4`),
+    unique("trivia_question_puzzle_position_unique").on(t.puzzleId, t.position),
+    index("trivia_question_puzzle_id_idx").on(t.puzzleId),
+  ],
+);
+
+// One row per logged-in user per puzzle — "one activation per day"
+// enforced by this unique constraint server-side, not by the client.
+export const triviaAttempt = pgTable(
+  "trivia_attempt",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => user.id),
+    puzzleId: uuid("puzzle_id")
+      .notNull()
+      .references(() => triviaPuzzle.id),
+    correctCount: integer("correct_count").notNull().default(0),
+    answeredCount: integer("answered_count").notNull().default(0),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    check("trivia_attempt_correct_count_check", sql`${t.correctCount} between 0 and 5`),
+    check("trivia_attempt_answered_count_check", sql`${t.answeredCount} between 0 and 5`),
+    check("trivia_attempt_correct_lte_answered_check", sql`${t.correctCount} <= ${t.answeredCount}`),
+    unique("trivia_attempt_user_puzzle_unique").on(t.userId, t.puzzleId),
+    index("trivia_attempt_user_id_idx").on(t.userId),
+  ],
+);
+
+// One row per question answered within an attempt. Append-only in
+// practice — the route refuses to overwrite an existing row, which is
+// what makes "one shot per player, per day" true rather than merely
+// unenforced.
+export const triviaAnswer = pgTable(
+  "trivia_answer",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    attemptId: uuid("attempt_id")
+      .notNull()
+      .references(() => triviaAttempt.id, { onDelete: "cascade" }),
+    questionId: uuid("question_id")
+      .notNull()
+      .references(() => triviaQuestion.id),
+    selectedIndex: integer("selected_index").notNull(),
+    isCorrect: boolean("is_correct").notNull(),
+    answeredAt: timestamp("answered_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    check("trivia_answer_selected_index_check", sql`${t.selectedIndex} between 0 and 4`),
+    unique("trivia_answer_attempt_question_unique").on(t.attemptId, t.questionId),
+    index("trivia_answer_attempt_id_idx").on(t.attemptId),
+  ],
+);

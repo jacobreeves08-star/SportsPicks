@@ -36,4 +36,13 @@ export const queryKeys = {
   /** The one current golf tournament for a league — not date-scoped
    * (the endpoint isn't either), unlike `slate`. */
   golfCurrent: (leagueId: string) => ["leagues", leagueId, "golf", "current"] as const,
+  /** Today's college quiz. Not keyed by date: the server decides which
+   * day it is (in a fixed anchor timezone the client has no business
+   * guessing — see the API's lib/trivia-puzzle.ts), so a date in the
+   * key would be a client-side guess that could disagree with the
+   * response it's caching. */
+  dailyTrivia: () => ["trivia", "daily"] as const,
+  /** The caller's own quiz metrics. Under the same `users/me` prefix
+   * as `me()`/`resultsDigest()` — it's profile data. */
+  triviaStats: () => ["users", "me", "trivia-stats"] as const,
 };

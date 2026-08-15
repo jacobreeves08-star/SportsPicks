@@ -20,6 +20,13 @@ export function profilePath(): string {
   return "/profile";
 }
 
+/** Public — playable with no account at all, and the URL a shared
+ * result sends a friend to. Not under `/leagues/...` because the
+ * daily quiz belongs to no league. */
+export function collegeQuizPath(): string {
+  return "/college-quiz";
+}
+
 export function loginPath(returnTo?: string): string {
   return returnTo ? `/login?returnTo=${encodeURIComponent(returnTo)}` : "/login";
 }

@@ -25,11 +25,14 @@ import type {
   MessageResponse,
   NotificationPreferenceResponse,
   OpsSummary,
+  DailyTrivia,
   Paginated,
   ResultsDigestResponse,
   SlateResponse,
   StandingsResponse,
   StandingsTimeframe,
+  TriviaAnswerResponse,
+  TriviaStats,
   UpdateProfileResponse,
   UserProfile,
   WrittenGolfPick,
@@ -297,4 +300,26 @@ export function pingHealth(): Promise<{ status: string }> {
  * banner is this epic's app-shell/banners/, see docs/app-shell.md. */
 export function getDataFreshness(): Promise<OpsSummary> {
   return apiFetch("/health/data-freshness", { auth: false });
+}
+
+// ---- Daily college trivia (playable logged-out) --------------------------
+
+/** `auth: false` is wrong here and deliberately NOT used: the endpoint
+ * is optionally-authenticated, so the token must be sent WHEN there is
+ * one (that's what makes the round get tracked) and simply omitted
+ * when there isn't. `apiFetch`'s default already does exactly that —
+ * it attaches the header only if a token exists. */
+export function getDailyTrivia(): Promise<DailyTrivia> {
+  return apiFetch("/trivia/daily");
+}
+
+export function answerDailyTrivia(body: {
+  questionId: string;
+  selectedIndex: number;
+}): Promise<TriviaAnswerResponse> {
+  return apiFetch("/trivia/daily/answers", { method: "POST", body });
+}
+
+export function getTriviaStats(): Promise<TriviaStats> {
+  return apiFetch("/trivia/me/stats");
 }

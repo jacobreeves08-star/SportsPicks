@@ -137,6 +137,12 @@ const envSchema = z.object({
   // same reasoning as SCHEDULE_INGEST_HEARTBEAT_URL: golf-ingest runs
   // on its own schedule, distinct from every other job's.
   GOLF_INGEST_HEARTBEAT_URL: optionalUrl(),
+
+  // Daily college trivia (docs/college-trivia.md) — its own heartbeat
+  // for the same reason as the two above, and the widest gap of any of
+  // them: nfl-athlete-ingest runs WEEKLY, so a monitor shared with a
+  // 15-minute job could never be configured to alert usefully for both.
+  NFL_ATHLETE_INGEST_HEARTBEAT_URL: optionalUrl(),
 });
 
 export type Env = z.infer<typeof envSchema>;

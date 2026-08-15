@@ -1,0 +1,138 @@
+{
+  "team": {
+    "id": "12",
+    "displayName": "Kansas City Chiefs"
+  },
+  "athletes": [
+    {
+      "position": "offense",
+      "items": [
+        {
+          "id": "4912218",
+          "displayName": "Cyrus Allen",
+          "jersey": "13",
+          "college": {
+            "id": "2132",
+            "name": "Cincinnati",
+            "logos": [
+              {
+                "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/2132.png",
+                "rel": [
+                  "full",
+                  "default"
+                ]
+              },
+              {
+                "href": "https://a.espncdn.com/i/teamlogos/ncaa/500-dark/2132.png",
+                "rel": [
+                  "full",
+                  "dark"
+                ]
+              }
+            ]
+          },
+          "position": {
+            "abbreviation": "WR"
+          },
+          "headshot": {
+            "href": "https://a.espncdn.com/i/headshots/nfl/players/full/4912218.png"
+          },
+          "experience": {
+            "years": 0
+          }
+        },
+        {
+          "id": "5093923",
+          "displayName": "Andrew Armstrong",
+          "jersey": "85",
+          "college": {
+            "id": "8",
+            "name": "Arkansas",
+            "logos": [
+              {
+                "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/8.png",
+                "rel": [
+                  "full",
+                  "default"
+                ]
+              },
+              {
+                "href": "https://a.espncdn.com/i/teamlogos/ncaa/500-dark/8.png",
+                "rel": [
+                  "full",
+                  "dark"
+                ]
+              }
+            ]
+          },
+          "position": {
+            "abbreviation": "WR"
+          },
+          "headshot": {
+            "href": "https://a.espncdn.com/i/headshots/nfl/players/full/5093923.png"
+          },
+          "experience": {
+            "years": 1
+          }
+        },
+        {
+          "id": "5144457",
+          "displayName": "Chukwuebuka Godrick",
+          "jersey": "72",
+          "position": {
+            "abbreviation": "OT"
+          },
+          "headshot": {
+            "href": "https://a.espncdn.com/i/headshots/nfl/players/full/5144457.png"
+          },
+          "experience": {
+            "years": 1
+          }
+        }
+      ]
+    },
+    {
+      "position": "injuredReserveOrOut",
+      "items": [
+        {
+          "id": "4431534",
+          "displayName": "Ethan Downs",
+          "jersey": "40",
+          "college": {
+            "id": "201",
+            "name": "Oklahoma",
+            "logos": [
+              {
+                "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/201.png",
+                "rel": [
+                  "full",
+                  "default"
+                ]
+              },
+              {
+                "href": "https://a.espncdn.com/i/teamlogos/ncaa/500-dark/201.png",
+                "rel": [
+                  "full",
+                  "dark"
+                ]
+              }
+            ]
+          },
+          "position": {
+            "abbreviation": "LB"
+          },
+          "headshot": {
+            "href": "https://a.espncdn.com/i/headshots/nfl/players/full/4431534.png"
+          },
+          "experience": {
+            "years": 1
+          }
+        }
+      ]
+    },
+    {
+      "position": "practiceSquad",
+      "items": []
+    }
+  ]
+}

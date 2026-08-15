@@ -1,0 +1,30 @@
+.buttonPrimary {
+  appearance: none;
+  border: 1.5px solid var(--color-pick-mine);
+  border-radius: var(--radius-md);
+  background-color: var(--color-pick-mine);
+  /* The accent is a bright lime fill — text on top must be near-black
+     to stay readable (same rule as ShareResultsButton.module.css). */
+  color: var(--color-surface);
+  font-family: var(--font-display);
+  font-size: 1rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  padding: var(--space-2) var(--space-4);
+  min-height: 44px;
+  flex: 1;
+  cursor: pointer;
+  transition:
+    background-color var(--motion-duration-fast) var(--motion-ease),
+    border-color var(--motion-duration-fast) var(--motion-ease);
+}
+
+.buttonPrimary:hover {
+  background-color: #bfe600;
+  border-color: #bfe600;
+}
+
+.buttonPrimary:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}

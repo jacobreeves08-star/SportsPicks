@@ -3,7 +3,7 @@ import { axe } from "jest-axe";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { resetAuthStoreForTests, setAuthTokens } from "../api/auth-store.js";
 import { ApiError } from "../api/errors.js";
-import type { OpsSummary, UserProfile } from "../api/types.js";
+import type { OpsSummary, TriviaStats, UserProfile } from "../api/types.js";
 import { resetCurrentLeagueForTests } from "../leagues/current-league-store.js";
 import { renderRouteAt } from "./render-route.js";
 
@@ -19,6 +19,9 @@ vi.mock("../api/endpoints.js", () => ({
   cancelAccountDeletion: vi.fn(),
   updateGlobalNotifications: vi.fn(),
   updateLeagueNotifications: vi.fn(),
+  // The profile now carries the college-quiz metrics section
+  // (docs/college-trivia.md), which queries this endpoint on mount.
+  getTriviaStats: vi.fn(),
 }));
 
 function profile(overrides: Partial<UserProfile> = {}): UserProfile {
@@ -48,12 +51,24 @@ const HEALTHY_SUMMARY: OpsSummary = {
   generatedAt: "2026-08-13T18:00:00.000Z",
 };
 
+const NO_TRIVIA_HISTORY: TriviaStats = {
+  daysPlayed: 0,
+  currentStreak: 0,
+  bestStreak: 0,
+  totalCorrect: 0,
+  totalAnswered: 0,
+  accuracyPct: null,
+  perfectDays: 0,
+  recent: [],
+};
+
 async function mockShell(me: UserProfile) {
-  const { getMe, getMyLeagues, getDataFreshness, pingHealth } = await import("../api/endpoints.js");
+  const { getMe, getMyLeagues, getDataFreshness, pingHealth, getTriviaStats } = await import("../api/endpoints.js");
   vi.mocked(getMe).mockResolvedValue(me);
   vi.mocked(getMyLeagues).mockResolvedValue([]);
   vi.mocked(getDataFreshness).mockResolvedValue(HEALTHY_SUMMARY);
   vi.mocked(pingHealth).mockResolvedValue({ status: "ok" });
+  vi.mocked(getTriviaStats).mockResolvedValue(NO_TRIVIA_HISTORY);
 }
 
 beforeEach(() => {

@@ -9,6 +9,7 @@ import {
   leagueInviteCode,
   leagueMember,
   leagueMemberReport,
+  nflAthlete,
   notificationLog,
   pick,
   pickAuditLog,
@@ -38,7 +39,7 @@ function firstOrThrow<T>(rows: T[]): T {
  */
 export async function truncateAllTables(): Promise<void> {
   await db.execute(
-    `truncate table "user", league, league_member, league_invite_code, league_member_report, game, pick, pick_audit_log, result, result_correction, session, verification_token, job_run, push_token, notification_log, analytics_event, tournament, tournament_entry, golf_pick, golf_pick_selection restart identity cascade`,
+    `truncate table "user", league, league_member, league_invite_code, league_member_report, game, pick, pick_audit_log, result, result_correction, session, verification_token, job_run, push_token, notification_log, analytics_event, tournament, tournament_entry, golf_pick, golf_pick_selection, nfl_athlete, trivia_puzzle, trivia_question, trivia_attempt, trivia_answer restart identity cascade`,
   );
 }
 
@@ -270,4 +271,41 @@ export async function createTestJobRun(overrides: Partial<typeof jobRun.$inferIn
     })
     .returning();
   return firstOrThrow(rows);
+}
+
+let athleteCounter = 0;
+
+/**
+ * One NFL player in the college-trivia pool. Each fixture gets a
+ * DISTINCT college by default — the puzzle builder needs five distinct
+ * colleges to fill a question's options (lib/trivia-puzzle.ts), so a
+ * shared default would make every test that builds a puzzle fail for a
+ * reason that has nothing to do with what it's testing.
+ */
+export async function createTestNflAthlete(overrides: Partial<typeof nflAthlete.$inferInsert> = {}) {
+  athleteCounter += 1;
+  const rows = await db
+    .insert(nflAthlete)
+    .values({
+      externalId: `test-athlete-${athleteCounter}`,
+      displayName: `Test Player ${athleteCounter}`,
+      positionAbbreviation: "QB",
+      collegeName: `Test College ${athleteCounter}`,
+      rosterStatus: "active",
+      ...overrides,
+    })
+    .returning();
+  return firstOrThrow(rows);
+}
+
+/** The smallest pool a puzzle can actually be built from: five
+ * questions needing five distinct colleges each, one of which is the
+ * answer — so 5 correct answers + 4 distractors that can be reused
+ * across questions. Ten athletes clears it comfortably. */
+export async function createTestAthletePool(count = 10) {
+  const athletes = [];
+  for (let i = 0; i < count; i++) {
+    athletes.push(await createTestNflAthlete());
+  }
+  return athletes;
 }

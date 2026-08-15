@@ -12,6 +12,7 @@ import { usersRoutes } from "./routes/users.routes.js";
 import { leaguesRoutes } from "./routes/leagues.routes.js";
 import { leagueInvitesRoutes } from "./routes/league-invites.routes.js";
 import { standingsRoutes } from "./routes/standings.routes.js";
+import { triviaRoutes } from "./routes/trivia.routes.js";
 import { healthRoutes } from "./routes/health.routes.js";
 
 /**
@@ -122,6 +123,11 @@ export function buildApp() {
   app.register(leaguesRoutes, { prefix: "/leagues" });
   app.register(leagueInvitesRoutes, { prefix: "/leagues" });
   app.register(standingsRoutes, { prefix: "/leagues" });
+  // Not under /leagues, and deliberately not behind `authenticate` at
+  // the plugin level the way every route group above is: the daily
+  // college quiz is playable with no account at all (docs/college-trivia.md),
+  // so its routes opt into auth individually.
+  app.register(triviaRoutes, { prefix: "/trivia" });
   app.register(healthRoutes);
 
   return app;

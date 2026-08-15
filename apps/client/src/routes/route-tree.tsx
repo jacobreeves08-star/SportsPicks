@@ -12,7 +12,7 @@ import { VerifyEmailChangeScreen } from "../screens/auth/VerifyEmailChangeScreen
 import { VerifyEmailScreen } from "../screens/auth/VerifyEmailScreen.js";
 import { GolfScreen } from "../screens/GolfScreen.js";
 import { HeadToHeadScreen } from "../screens/HeadToHeadScreen.js";
-import { HomeScreen } from "../screens/HomeScreen.js";
+import { IndexScreen } from "../screens/IndexScreen.js";
 import { CreateLeagueScreen } from "../screens/leagues/CreateLeagueScreen.js";
 import { InvitePreviewScreen } from "../screens/leagues/InvitePreviewScreen.js";
 import { JoinCodeEntryScreen } from "../screens/leagues/JoinCodeEntryScreen.js";
@@ -20,6 +20,7 @@ import { LeagueSettingsScreen } from "../screens/leagues/LeagueSettingsScreen.js
 import { ProfileScreen } from "../screens/ProfileScreen.js";
 import { SlateScreen } from "../screens/SlateScreen.js";
 import { StandingsScreen } from "../screens/StandingsScreen.js";
+import { CollegeQuizPage } from "../screens/trivia/CollegeQuizScreen.js";
 import { safeReturnTo } from "./post-login-redirect.js";
 
 /**
@@ -199,13 +200,45 @@ const authenticatedLayoutRoute = createRoute({
   component: AppShell,
 });
 
-/** All-leagues home (Epic 8's own brief anticipated this as a nav
- * destination but never built it — no screen exists yet, this epic
- * only adds the route itself). */
-const homeRoute = createRoute({
-  getParentRoute: () => authenticatedLayoutRoute,
+/**
+ * `/` — the one route in this app that is genuinely BOTH public and
+ * authenticated, and therefore the one that can't hang off
+ * `authenticatedLayoutRoute`.
+ *
+ * It used to: `/` was an auth-guarded route whose only behavior for a
+ * stranger was to bounce to `/login`, so this app's front door WAS a
+ * password field. The college-quiz feature requires a home page a
+ * visitor can use with no account (its first trigger), and a shared
+ * result link needs somewhere real to land, so `/` moved up to the
+ * root and now decides what to render from auth state instead of
+ * refusing to render at all.
+ *
+ * A COMPONENT-level branch, not a `beforeLoad` redirect to two
+ * separate URLs: `/` has to keep working as one canonical address for
+ * both audiences (`AppShell`'s brand link and `BottomNav`'s Home tab
+ * both point here), and a logged-in user's home is still the leagues
+ * screen with full shell chrome — which `MaybeShell` supplies.
+ *
+ * Every OTHER protected route is untouched and still guarded by
+ * `authenticatedLayoutRoute` exactly as before.
+ */
+const indexRoute = createRoute({
+  getParentRoute: () => rootRoute,
   path: "/",
-  component: HomeScreen,
+  component: IndexScreen,
+});
+
+/**
+ * `/college-quiz` — public, for the same reason `/` is: the feature
+ * brief's first trigger is "from the home page without needing to log
+ * in", and this is also the URL a shared result points a friend at.
+ * `CollegeQuizPage` wraps the screen in `MaybeShell`, so a logged-in
+ * caller keeps their nav chrome and one URL serves both audiences.
+ */
+const collegeQuizRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/college-quiz",
+  component: CollegeQuizPage,
 });
 
 const profileRoute = createRoute({
@@ -329,6 +362,8 @@ const golfRoute = createRoute({
 });
 
 const routeTree = rootRoute.addChildren([
+  indexRoute,
+  collegeQuizRoute,
   loginRoute,
   signupRoute,
   passwordResetRequestRoute,
@@ -338,7 +373,6 @@ const routeTree = rootRoute.addChildren([
   joinRoute,
   legacyJoinRoute,
   authenticatedLayoutRoute.addChildren([
-    homeRoute,
     profileRoute,
     createLeagueRoute,
     leagueLayoutRoute.addChildren([

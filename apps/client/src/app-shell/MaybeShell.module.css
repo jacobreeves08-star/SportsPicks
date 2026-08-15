@@ -1,0 +1,18 @@
+/**
+ * The logged-out branch of `MaybeShell` — a page with no nav chrome
+ * around it, so it has to provide its own page padding and centering
+ * (inside the shell, `AppShell.module.css`'s `.main` does this job).
+ */
+.bareMain {
+  display: block;
+  min-height: 100vh;
+  min-height: 100dvh;
+  background-color: var(--color-surface);
+  padding: var(--space-5) var(--space-4);
+}
+
+@media (min-width: 640px) {
+  .bareMain {
+    padding: var(--space-6) var(--space-5);
+  }
+}

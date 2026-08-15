@@ -399,3 +399,90 @@ export interface ResultsDigestEntry {
 export interface ResultsDigestResponse {
   leagues: ResultsDigestEntry[];
 }
+
+// ---- Daily college trivia ---------------------------------------------
+
+/** One question's player. `headshotUrl` is ESPN's CDN URL and may be
+ * null — the card falls back to name-only, never a broken image. */
+export interface TriviaAthlete {
+  displayName: string;
+  positionAbbreviation: string | null;
+  jersey: string | null;
+  headshotUrl: string | null;
+  teamDisplayName: string | null;
+}
+
+/** Deliberately has NO "correct answer" field — the server never sends
+ * one with the question (see the API's routes/trivia.routes.ts). The
+ * only way to learn it is to POST an answer, which is what stops the
+ * quiz being solvable from the network tab. */
+export interface TriviaQuestion {
+  id: string;
+  position: number;
+  athlete: TriviaAthlete;
+  options: string[];
+}
+
+export interface TriviaAnsweredQuestion {
+  questionId: string;
+  selectedIndex: number;
+  isCorrect: boolean;
+  correctIndex: number;
+}
+
+/** The caller's server-side progress on today's puzzle. `null` for a
+ * logged-out visitor — there is nothing saved for them. */
+export interface TriviaAttempt {
+  correctCount: number;
+  answeredCount: number;
+  completed: boolean;
+  answers: TriviaAnsweredQuestion[];
+}
+
+export interface DailyTrivia {
+  puzzleId: string;
+  date: string;
+  puzzleNumber: number;
+  questionCount: number;
+  questions: TriviaQuestion[];
+  /** Whether this run is being SAVED, not whether it's allowed — a
+   * logged-out visitor plays and is graded exactly the same, they just
+   * get nothing recorded. Drives the "log in to track your streak"
+   * nudge, nothing else. */
+  tracked: boolean;
+  attempt: TriviaAttempt | null;
+}
+
+export interface TriviaAnswerResponse {
+  questionId: string;
+  correct: boolean;
+  correctIndex: number;
+  correctCollege: string;
+  /** Always present, and echoed back rather than assumed because it
+   * can DIFFER from what was just submitted: a replayed answer
+   * returns the originally STORED choice, not the new one. */
+  selectedIndex: number;
+  tracked: boolean;
+  attempt: TriviaAttempt | null;
+}
+
+export interface TriviaDayResult {
+  date: string;
+  puzzleNumber: number;
+  correctCount: number;
+  answeredCount: number;
+  completed: boolean;
+}
+
+export interface TriviaStats {
+  daysPlayed: number;
+  currentStreak: number;
+  bestStreak: number;
+  totalCorrect: number;
+  totalAnswered: number;
+  /** null (not 0) when nothing has been answered yet — "no data" and
+   * "0% accuracy" are different and render differently. */
+  accuracyPct: number | null;
+  perfectDays: number;
+  recent: TriviaDayResult[];
+}

@@ -40,11 +40,15 @@ To run a scheduled job manually (same commands Render's Cron Jobs run on a sched
 ```bash
 npm run schedule-ingest --workspace apps/api
 npm run score-poll --workspace apps/api
+npm run golf-ingest --workspace apps/api
+npm run nfl-athlete-ingest --workspace apps/api
 npm run anonymize-accounts --workspace apps/api
 npm run pick-reminder --workspace apps/api
 npm run results-summary --workspace apps/api
 npm run operator-digest --workspace apps/api
 ```
+
+Note that `nfl-athlete-ingest` (the daily college quiz's player pool) does nothing while `SPORTS_API_PROVIDER=mock`, which is the local default — so a fresh dev database has an empty pool and the quiz correctly reports "no quiz today" until it's run against the real API. See [`docs/college-trivia.md`](docs/college-trivia.md).
 
 ### Running the client
 
@@ -114,6 +118,10 @@ Pick-reminder and results-summary email notifications (idempotent per-member sen
 ## Design system
 
 `apps/client/src/design-system/` — semantic design tokens (verified against WCAG AA contrast by a dedicated test, not just eyeballed), typography/layout primitives with mandatory tabular numerals on every record/score/rank/countdown, the split pick control (a proper radio group, not two buttons — full keyboard nav, screen-reader announcements for all seven of its states), result/state indicators that never rely on color alone, and first-class loading/empty/error/stale components (stale is deliberately distinct from loading — known-old data shown anyway, not still fetching). Every component is pure and prop-driven, decoupled entirely from the client infrastructure above, so it's mockable in a Storybook gallery (`npm run storybook --workspace apps/client`) reviewable on a real phone. Accessibility is enforced in CI two ways — static lint (`eslint-plugin-jsx-a11y`) and a `jest-axe` scan per component/state — closing a real pre-existing gap where `apps/client`'s own test suite never ran in CI at all. Full design, the `PickControlState` contract, and two more real gaps found against the shipped API in [`docs/design-system.md`](docs/design-system.md).
+
+## Daily college trivia
+
+"Which college did this player attend?" — five NFL players a day, five colleges each. The first feature in the app that belongs to no league: playable with **no account at all** from the home page, or from a button on the leagues home after logging in, with results tracked against the profile (streak, accuracy, perfect days) for anyone signed in and a spoiler-safe shareable result either way. Building this is also what gave the app a real public home page — `/` was previously auth-guarded and bounced a stranger straight to `/login`. The shared-puzzle design (why everyone gets the same five players, why the correct answer never ships with the question, why the guest gate is honest about not being enforcement), the profile metrics, and the ESPN roster ingest are documented in [`docs/college-trivia.md`](docs/college-trivia.md).
 
 ## Branching & contributing
 

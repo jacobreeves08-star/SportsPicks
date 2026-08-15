@@ -1,0 +1,171 @@
+.screen {
+  max-width: 32rem;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.title {
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.01em;
+}
+
+.inlineLink {
+  color: var(--color-pick-mine);
+  text-decoration: underline;
+}
+
+.inlineLink:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+/* --- Progress pips ------------------------------------------------- */
+
+.pips {
+  width: 100%;
+}
+
+.pip {
+  flex: 1;
+  height: 6px;
+  border-radius: var(--radius-full);
+  background-color: var(--color-border);
+}
+
+.pending {
+  /* Deliberately dimmer than the border token rather than invisible —
+     an unanswered slot should still read as "a question that exists". */
+  opacity: 0.35;
+}
+
+.hit {
+  background-color: var(--color-result-hit);
+  opacity: 1;
+}
+
+.miss {
+  background-color: var(--color-result-miss);
+  opacity: 1;
+}
+
+/* --- Question card -------------------------------------------------- */
+
+.headshot {
+  width: 112px;
+  height: 112px;
+  object-fit: cover;
+  object-position: top center;
+  border-radius: var(--radius-full);
+  background-color: var(--color-surface);
+  /* ESPN headshots are transparent PNGs cropped at the shoulders — the
+     solid backdrop is what keeps them from floating on the card. */
+}
+
+.playerName {
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  text-align: center;
+  letter-spacing: 0.01em;
+}
+
+.prompt {
+  text-align: center;
+}
+
+.options {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  width: 100%;
+}
+
+.option {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  width: 100%;
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  padding: var(--space-3) var(--space-4);
+  /* 44px minimum touch target, per docs/accessibility-and-responsive.md. */
+  min-height: 48px;
+  cursor: pointer;
+  transition:
+    border-color var(--motion-duration-fast) var(--motion-ease),
+    background-color var(--motion-duration-fast) var(--motion-ease);
+}
+
+.option:hover:not(:disabled) {
+  border-color: var(--color-pick-mine);
+}
+
+.option:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+.option:disabled {
+  cursor: default;
+}
+
+/* Revealed states. Each is paired with a ✓/✕ glyph in the markup —
+   never color alone (docs/accessibility-and-responsive.md). */
+
+.optionCorrect {
+  border-color: var(--color-result-hit);
+  background-color: color-mix(in srgb, var(--color-result-hit) 18%, var(--color-surface));
+  color: var(--color-text);
+}
+
+.optionWrong {
+  border-color: var(--color-result-miss);
+  background-color: color-mix(in srgb, var(--color-result-miss) 18%, var(--color-surface));
+  color: var(--color-text);
+}
+
+.optionMuted {
+  opacity: 0.45;
+}
+
+.mark {
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+/* --- Next ----------------------------------------------------------- */
+
+.nextButton {
+  appearance: none;
+  width: 100%;
+  border: 1.5px solid var(--color-pick-mine);
+  border-radius: var(--radius-md);
+  background-color: var(--color-pick-mine);
+  /* Near-black on the lime fill — same rule as every other primary
+     button in this app. */
+  color: var(--color-surface);
+  font-family: var(--font-display);
+  font-size: 1rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  padding: var(--space-3) var(--space-4);
+  min-height: 48px;
+  cursor: pointer;
+  transition: background-color var(--motion-duration-fast) var(--motion-ease);
+}
+
+.nextButton:hover {
+  background-color: #bfe600;
+}
+
+.nextButton:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}

@@ -44,10 +44,26 @@ describe("route-tree — the auth guard (authenticatedLayoutRoute)", () => {
     expect(router.state.location.pathname).toBe("/leagues/league-1/standings");
   });
 
-  it("guards the home route the same way", async () => {
+  /**
+   * `/` is deliberately NOT guarded any more. It used to bounce a
+   * logged-out visitor to /login, which made this app's front door a
+   * password field; the daily college quiz needs a home page a
+   * stranger can actually use (docs/college-trivia.md), so `/` moved
+   * off `authenticatedLayoutRoute` and now renders the public landing
+   * for a visitor with no session. Every other protected route is
+   * still guarded exactly as before — see the profile case below.
+   */
+  it("does NOT guard the home route — a logged-out visitor lands on the public home page", async () => {
     const router = routerAt("/");
     await router.load();
-    expect(router.state.location.pathname).toBe("/login");
+    expect(router.state.location.pathname).toBe("/");
+    expect(router.state.matches.find((m) => m.routeId === "/")).toBeDefined();
+  });
+
+  it("does NOT guard /college-quiz — it's playable with no account", async () => {
+    const router = routerAt("/college-quiz");
+    await router.load();
+    expect(router.state.location.pathname).toBe("/college-quiz");
   });
 
   it("guards the profile route the same way", async () => {
@@ -109,10 +125,21 @@ describe("route-tree — deep link resolution (authenticated)", () => {
     expect(match?.params).toEqual({ leagueId: "league-1", date: "2026-08-13" });
   });
 
+  /** `/` is a ROOT-level route now, not `_authenticated/` — the
+   * screen it renders still branches on auth (leagues home when
+   * logged in, public landing when not), but the route itself is one
+   * shared address. */
   it("resolves the home route", async () => {
     const router = routerAt("/");
     await router.load();
-    const match = router.state.matches.find((m) => m.routeId === "/_authenticated/");
+    const match = router.state.matches.find((m) => m.routeId === "/");
+    expect(match).toBeDefined();
+  });
+
+  it("resolves /college-quiz for a logged-in visitor too — one URL, both audiences", async () => {
+    const router = routerAt("/college-quiz");
+    await router.load();
+    const match = router.state.matches.find((m) => m.routeId === "/college-quiz");
     expect(match).toBeDefined();
   });
 
