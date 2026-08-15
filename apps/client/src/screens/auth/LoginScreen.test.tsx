@@ -1,9 +1,10 @@
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { axe } from "jest-axe";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { resetAuthStoreForTests } from "../../api/auth-store.js";
 import { ApiError } from "../../api/errors.js";
 import type { OpsSummary, UserProfile } from "../../api/types.js";
+import { SPORT_OPTIONS } from "../../leagues/sports.js";
 import { renderRouteAt } from "../render-route.js";
 
 // LoginScreen navigates to a PROTECTED route on success, which mounts
@@ -120,5 +121,98 @@ describe("LoginScreen", () => {
     await renderRouteAt("/login");
     await waitFor(() => screen.getByLabelText("Email"));
     expect(await axe(document.body)).toHaveNoViolations();
+  });
+});
+
+/**
+ * `/login` is a full marketing landing page, not just a form — these
+ * cover the parts of that page a change could silently break without
+ * failing anything above: the login form staying reachable, the copy
+ * matching what the app can actually do, and `?returnTo=` surviving
+ * every route link the marketing chrome added.
+ */
+describe("LoginScreen as the marketing landing page", () => {
+  it("makes the hero headline the page's only h1, with the form under an h2", async () => {
+    await renderRouteAt("/login");
+
+    const h1s = await screen.findAllByRole("heading", { level: 1 });
+    expect(h1s).toHaveLength(1);
+    expect(h1s[0]).toHaveTextContent(/pick your winners/i);
+    expect(screen.getByRole("heading", { level: 2, name: "Log in" })).toBeInTheDocument();
+  });
+
+  it("keeps the login form on the page itself, not a click away", async () => {
+    await renderRouteAt("/login");
+
+    // The marketing sections must never push the form onto another
+    // route — a returning user's whole reason for being here.
+    const card = document.getElementById("login");
+    expect(card).not.toBeNull();
+    expect(within(card as HTMLElement).getByLabelText("Email")).toBeInTheDocument();
+    expect(within(card as HTMLElement).getByRole("button", { name: "Log in" })).toBeInTheDocument();
+  });
+
+  it("gives every in-page nav link a real target on this page", async () => {
+    await renderRouteAt("/login");
+    await screen.findAllByRole("heading", { level: 1 });
+
+    // A dead "#features" link is invisible in review and obvious to a
+    // visitor, so assert the contract rather than eyeballing it.
+    const hashLinks = Array.from(document.querySelectorAll<HTMLAnchorElement>('a[href^="#"]'));
+    expect(hashLinks.length).toBeGreaterThan(0);
+    for (const link of hashLinks) {
+      expect(document.getElementById(link.getAttribute("href")!.slice(1))).not.toBeNull();
+    }
+  });
+
+  it("advertises exactly the sports a league can actually be created with", async () => {
+    await renderRouteAt("/login");
+    await screen.findAllByRole("heading", { level: 1 });
+
+    // The grid renders SPORT_OPTIONS directly, so this fails loudly if
+    // the page ever grows a hand-typed sport list that drifts from the
+    // server-validated one.
+    for (const sport of SPORT_OPTIONS) {
+      expect(screen.getByText(sport.label)).toBeInTheDocument();
+    }
+    expect(screen.getByRole("heading", { name: new RegExp(`${SPORT_OPTIONS.length} sports`, "i") })).toBeInTheDocument();
+  });
+
+  it("puts the no-account quiz in the hero, not only in a section far down the page", async () => {
+    await renderRouteAt("/login");
+    await screen.findAllByRole("heading", { level: 1 });
+
+    // The quiz is the only thing here a visitor with no account can
+    // do, so it has to be reachable without scrolling. jsdom does no
+    // layout, so "above the fold" isn't directly assertable — but
+    // "inside the hero" is the structural fact that makes it true, and
+    // it's the part a later edit could silently undo.
+    const hero = document.querySelector<HTMLElement>('section[aria-labelledby="hero-title"]');
+    expect(hero).not.toBeNull();
+    expect(within(hero as HTMLElement).getByRole("link", { name: /play now/i })).toHaveAttribute(
+      "href",
+      "/college-quiz",
+    );
+    expect(within(hero as HTMLElement).getByText(/no account needed/i)).toBeInTheDocument();
+  });
+
+  it("keeps the fuller quiz pitch further down too, pointing at the same place", async () => {
+    await renderRouteAt("/login");
+
+    expect(await screen.findByRole("link", { name: /play today.s quiz/i })).toHaveAttribute("href", "/college-quiz");
+  });
+
+  it("carries returnTo through EVERY signup link, not just the one in the form", async () => {
+    // The session-expiry contract has to survive the marketing chrome:
+    // signing up from the header or the closing CTA must land the
+    // visitor back where they were, exactly like the card's link does.
+    await renderRouteAt("/login?returnTo=%2Fprofile");
+    await screen.findAllByRole("heading", { level: 1 });
+
+    const signupLinks = Array.from(document.querySelectorAll<HTMLAnchorElement>('a[href^="/signup"]'));
+    expect(signupLinks.length).toBeGreaterThan(1);
+    for (const link of signupLinks) {
+      expect(link).toHaveAttribute("href", "/signup?returnTo=%2Fprofile");
+    }
   });
 });

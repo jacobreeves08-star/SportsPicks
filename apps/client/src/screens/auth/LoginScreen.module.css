@@ -2,36 +2,70 @@
  * LoginScreen's own page shell — deliberately NOT StandaloneLayout.
  * StandaloneLayout is shared by several plain-card screens, including
  * one that's authenticated (CreateLeagueScreen, nested under
- * AppShell) — giving it a full marketing hero would break that
+ * AppShell) — giving it a full marketing site would break that
  * screen's layout. Login is the app's actual front door for a logged-
- * out visitor, so it gets its own richer treatment instead.
+ * out visitor, so it gets its own treatment: a real landing page, with
+ * the login card living inside the hero.
+ *
+ * Only the hero and the login card are styled here. Everything below
+ * the hero (bands, cards, footer) is `screens/marketing/Marketing.module.css`,
+ * shared so the other logged-out front door can use the same sections.
  */
 .page {
   min-height: 100vh;
   min-height: 100dvh;
-  display: grid;
-  grid-template-columns: 1fr;
   background-color: var(--color-surface);
 }
 
-@media (min-width: 900px) {
-  .page {
-    grid-template-columns: 1.1fr 1fr;
-  }
+/* Visible only while focused — the standard skip-link treatment. It
+   sits above the sticky header's z-index so it isn't clipped by it. */
+.skipLink {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 30;
+  padding: var(--space-3) var(--space-4);
+  border-radius: 0 0 var(--radius-md) 0;
+  background-color: var(--color-pick-mine);
+  color: var(--color-surface);
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  text-decoration: none;
+}
+
+.skipLink:focus {
+  left: 0;
 }
 
 .hero {
   position: relative;
-  display: flex;
-  align-items: center;
-  padding: var(--space-6) var(--space-5) var(--space-5);
   overflow: hidden;
   background: radial-gradient(circle at 20% 15%, rgba(215, 255, 43, 0.12), transparent 55%), var(--color-surface);
 }
 
+/* The hero is the one place on this page where a column runs BESIDE
+   the copy rather than under it — everything below stacks into the
+   shared `.section` rhythm instead. Deliberately not a full 100vh: a
+   landing page whose second section starts exactly at the fold reads
+   as "there's nothing below this," which is the opposite of the point
+   of the rest of the page. */
+.heroInner {
+  display: grid;
+  grid-template-columns: 1fr;
+  align-items: center;
+  gap: var(--space-6);
+  width: 100%;
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: var(--space-7) var(--space-5);
+}
+
 @media (min-width: 900px) {
-  .hero {
-    padding: var(--space-8);
+  .heroInner {
+    grid-template-columns: 1.05fr 1fr;
+    gap: var(--space-8);
+    padding: var(--space-8) var(--space-6);
   }
 }
 
@@ -64,35 +98,39 @@
 .heroContent {
   position: relative;
   z-index: 1;
-  max-width: 440px;
+  max-width: 520px;
 }
 
-.brand {
-  font-family: var(--font-display);
-  text-transform: uppercase;
+/* The positioning claim, above the headline — the three things a
+   visitor most wants ruled in or out before reading anything else. */
+.heroBadge {
+  display: inline-flex;
+  align-self: flex-start;
+  align-items: center;
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-full);
+  border: 1px solid var(--color-pick-mine-wash-strong);
   color: var(--color-pick-mine);
-  font-size: 28px;
-  letter-spacing: 0.02em;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
 }
 
 .headline {
-  font-family: var(--font-display);
-  text-transform: uppercase;
   color: var(--color-text);
-  font-size: 40px;
-  line-height: 1.05;
-  letter-spacing: 0.01em;
+  font-size: 44px;
+  line-height: 1.02;
   margin: 0;
 }
 
 @media (min-width: 900px) {
   .headline {
-    font-size: 52px;
+    font-size: 60px;
   }
 }
 
 .tagline {
-  max-width: 38ch;
+  max-width: 42ch;
 }
 
 .pill {
@@ -108,14 +146,124 @@
   letter-spacing: 0.04em;
 }
 
+/* The above-the-fold quiz teaser. Stacks on the narrowest phones and
+   goes side-by-side from 520px up — measured against the tightest case
+   it has to survive, which is NOT the narrowest viewport: at exactly
+   900px the hero splits into two columns and this card is suddenly
+   living in a ~379px one. The copy + button come to ~356px there, so
+   the row layout holds all the way down that seam. */
+.quizTeaser {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-pick-mine-wash-strong);
+  background:
+    radial-gradient(circle at 100% 0%, rgba(215, 255, 43, 0.1), transparent 60%),
+    var(--color-surface-raised);
+}
+
+@media (min-width: 520px) {
+  .quizTeaser {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4);
+  }
+}
+
+.quizTeaserCopy {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.quizTeaserEyebrow {
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 11px;
+  color: var(--color-pick-mine);
+}
+
+.quizTeaserTitle {
+  color: var(--color-text);
+  font-weight: 700;
+}
+
+/* Outlined, not filled — the lime FILL on this page is reserved for
+   the single primary action in any given view (the login button here,
+   the signup button in the header), and a second solid lime block in
+   the same viewport would leave neither reading as primary. */
+.quizTeaserButton {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  /* 44px, not the 40 a card this compact visually wants — it's a real
+     tap target, and every other button on this page is 44 or 48. */
+  min-height: 44px;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1.5px solid var(--color-pick-mine);
+  color: var(--color-pick-mine);
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  font-size: 14px;
+  white-space: nowrap;
+  text-decoration: none;
+  transition:
+    background-color var(--motion-duration-fast) var(--motion-ease),
+    color var(--motion-duration-fast) var(--motion-ease);
+}
+
+.quizTeaserButton:hover {
+  background-color: var(--color-pick-mine);
+  color: var(--color-surface);
+}
+
+.quizTeaserButton:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 3px;
+}
+
 .formSide {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: var(--space-5);
+}
+
+@media (min-width: 900px) {
+  .formSide {
+    justify-content: flex-end;
+  }
 }
 
 .card {
   width: 100%;
   max-width: 420px;
+  /* Every "#login" jump on this page (skip link, header, closing CTA)
+     lands here, and the header is sticky — without this the card's own
+     heading ends up underneath it. */
+  scroll-margin-top: 88px;
+}
+
+/* The card is focusable via `tabIndex={-1}` purely as a jump target;
+   it should show a ring when a skip link put focus there, but never
+   read as an interactive control. */
+.card:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 4px;
+}
+
+.cardTitle {
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.01em;
 }

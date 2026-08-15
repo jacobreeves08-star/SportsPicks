@@ -1,0 +1,617 @@
+/**
+ * The shared stylesheet for every marketing section on the logged-out
+ * front door (header, bands, footer). One module rather than one per
+ * component on purpose: these sections only ever appear stacked
+ * together on the same page, and the whole point of the redesign is
+ * that they read as a single continuous site — a shared `.section`
+ * rhythm and one set of band/heading rules is what actually enforces
+ * that, instead of three files that drift apart.
+ *
+ * Every value here is a token from `design-system/tokens/tokens.css`.
+ * The two literals that aren't (`#bfe600` for a primary-button hover,
+ * `rgba(215, 255, 43, ...)` glows) are the same ones already used by
+ * `StandaloneForm.module.css` and `PublicHomeScreen.module.css` — both
+ * are derivations of `--color-pick-mine`, not new colors.
+ */
+
+/* ---------------------------------------------------------------- */
+/* Shared section scaffolding                                        */
+/* ---------------------------------------------------------------- */
+
+.section {
+  width: 100%;
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: var(--space-7) var(--space-5);
+}
+
+@media (min-width: 900px) {
+  .section {
+    padding: var(--space-8) var(--space-6);
+  }
+}
+
+/* Anchor targets sit under a sticky header — without this, jumping to
+   `#how-it-works` parks the heading behind the header bar. */
+.anchor {
+  scroll-margin-top: 88px;
+}
+
+/* Alternating band background, so the page reads as distinct chapters
+   rather than one long scroll of identical near-black. `--color-surface-raised`
+   is the same fill a card uses, which is what keeps the banded sections
+   feeling like part of the same system. */
+.band {
+  background-color: var(--color-surface-raised);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.eyebrow {
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 12px;
+  color: var(--color-pick-mine);
+}
+
+/* Section titles opt into the display face per-instance — base.css
+   deliberately applies it to h1 only (see its own comment), and these
+   are all h2s. */
+.sectionTitle {
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.01em;
+  font-size: 30px;
+  line-height: 1.1;
+  color: var(--color-text);
+}
+
+@media (min-width: 900px) {
+  .sectionTitle {
+    font-size: 40px;
+  }
+}
+
+.sectionLead {
+  max-width: 58ch;
+}
+
+/* ---------------------------------------------------------------- */
+/* Header                                                            */
+/* ---------------------------------------------------------------- */
+
+/* Translucent + blurred rather than solid: the hero's lime glow
+   scrolling underneath it is most of what makes the page feel like a
+   site instead of a form. `background-color` alone is the fallback
+   wherever backdrop-filter isn't supported. */
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background-color: rgba(10, 10, 11, 0.82);
+  backdrop-filter: blur(14px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.headerInner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  width: 100%;
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: var(--space-3) var(--space-5);
+}
+
+@media (min-width: 900px) {
+  .headerInner {
+    padding: var(--space-3) var(--space-6);
+  }
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  color: var(--color-pick-mine);
+  font-size: 24px;
+  letter-spacing: 0.02em;
+  text-decoration: none;
+}
+
+.brand:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 4px;
+  border-radius: var(--radius-sm);
+}
+
+/* The lime dot in the wordmark — a tiny "live" tell, purely
+   decorative, and the only ornament in the header. */
+.brandDot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-full);
+  background-color: var(--color-pick-mine);
+}
+
+/* The in-page anchor links collapse below the desktop breakpoint
+   rather than becoming a hamburger: every destination is a section of
+   THIS page, reachable by scrolling, so a drawer would be a whole
+   interactive component built to duplicate the scrollbar. The two
+   things a phone visitor can't get by scrolling — log in, sign up —
+   stay in the header at every width. */
+.navLinks {
+  display: none;
+}
+
+@media (min-width: 900px) {
+  .navLinks {
+    display: flex;
+    align-items: center;
+    gap: var(--space-5);
+    list-style: none;
+  }
+}
+
+.navLink {
+  color: var(--color-text-dim);
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: color var(--motion-duration-fast) var(--motion-ease);
+}
+
+.navLink:hover {
+  color: var(--color-text);
+}
+
+.navLink:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 4px;
+  border-radius: var(--radius-sm);
+}
+
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* A logged-out visitor who already has an account is the single most
+   common arrival on this page, so "Log in" is never more than one tap
+   away no matter how far down the marketing they've scrolled. It only
+   drops out below 360px — measured, not guessed: brand + this link +
+   the signup button come to ~340px including the header's own padding
+   and gaps, so it survives every common phone width (375 and up) and
+   gives way only on the genuinely tiny ones, where the form is still a
+   scroll away and the skip link still covers keyboard users. */
+.headerLogin {
+  display: none;
+  color: var(--color-text);
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+}
+
+@media (min-width: 360px) {
+  .headerLogin {
+    display: inline-flex;
+  }
+}
+
+.headerLogin:hover {
+  color: var(--color-pick-mine);
+}
+
+.headerLogin:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+/* ---------------------------------------------------------------- */
+/* Buttons (links styled as buttons — never a <button> that navigates) */
+/* ---------------------------------------------------------------- */
+
+.buttonPrimary,
+.buttonSecondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-md);
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  font-size: 15px;
+  text-decoration: none;
+  white-space: nowrap;
+  transition:
+    background-color var(--motion-duration-fast) var(--motion-ease),
+    border-color var(--motion-duration-fast) var(--motion-ease),
+    transform var(--motion-duration-fast) var(--motion-ease);
+}
+
+.buttonPrimary {
+  background-color: var(--color-pick-mine);
+  /* Near-black on the lime fill — same flip every primary surface in
+     this app made when the accent went from dark indigo to light lime. */
+  color: var(--color-surface);
+  border: 1.5px solid var(--color-pick-mine);
+  box-shadow: 0 1px 2px rgba(215, 255, 43, 0.15), 0 8px 20px rgba(215, 255, 43, 0.22);
+}
+
+.buttonPrimary:hover {
+  background-color: #bfe600;
+  border-color: #bfe600;
+}
+
+.buttonSecondary {
+  background-color: transparent;
+  color: var(--color-text);
+  border: 1.5px solid var(--color-border);
+}
+
+.buttonSecondary:hover {
+  border-color: var(--color-pick-mine);
+  color: var(--color-pick-mine);
+}
+
+.buttonPrimary:active,
+.buttonSecondary:active {
+  transform: scale(0.98);
+}
+
+.buttonPrimary:focus-visible,
+.buttonSecondary:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 3px;
+}
+
+.buttonLarge {
+  min-height: 52px;
+  padding: var(--space-3) var(--space-6);
+  font-size: 17px;
+}
+
+/* ---------------------------------------------------------------- */
+/* Stat band                                                         */
+/* ---------------------------------------------------------------- */
+
+.statGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-5);
+  list-style: none;
+}
+
+@media (min-width: 760px) {
+  .statGrid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.statValue {
+  display: block;
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  color: var(--color-pick-mine);
+  font-size: 40px;
+  line-height: 1;
+}
+
+@media (min-width: 900px) {
+  .statValue {
+    font-size: 52px;
+  }
+}
+
+.statLabel {
+  display: block;
+  margin-top: var(--space-2);
+  max-width: 22ch;
+}
+
+/* ---------------------------------------------------------------- */
+/* How it works                                                      */
+/* ---------------------------------------------------------------- */
+
+.stepGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-4);
+  list-style: none;
+  counter-reset: step;
+}
+
+@media (min-width: 760px) {
+  .stepGrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.stepCard {
+  position: relative;
+  height: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* The step number is generated, not written into the markup — it's
+   pure ordinal decoration of an <ol> that already conveys the order
+   semantically, so a screen reader shouldn't hear "one" twice. */
+.stepCard::before {
+  counter-increment: step;
+  content: counter(step);
+  display: block;
+  font-family: var(--font-display);
+  font-size: 34px;
+  line-height: 1;
+  color: var(--color-pick-mine);
+  opacity: 0.85;
+}
+
+.cardTitle {
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.01em;
+  font-size: 20px;
+  line-height: 1.15;
+}
+
+/* ---------------------------------------------------------------- */
+/* Sports                                                            */
+/* ---------------------------------------------------------------- */
+
+.sportGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+  list-style: none;
+}
+
+@media (min-width: 600px) {
+  .sportGrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 900px) {
+  .sportGrid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.sportChip {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 52px;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background-color: var(--color-surface-raised);
+  font-weight: 600;
+  font-size: 15px;
+}
+
+/* Deliberately not an icon or a logo — this app ships no image assets
+   and no team/league marks. A small lime tick reads as "included"
+   without implying any official affiliation. */
+.sportTick {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-full);
+  background-color: var(--color-pick-mine);
+}
+
+/* ---------------------------------------------------------------- */
+/* Features                                                          */
+/* ---------------------------------------------------------------- */
+
+.featureGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-4);
+  list-style: none;
+}
+
+@media (min-width: 700px) {
+  .featureGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1000px) {
+  .featureGrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.featureCard {
+  height: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  transition: border-color var(--motion-duration-base) var(--motion-ease);
+}
+
+.featureCard:hover {
+  border-color: var(--color-pick-mine-wash-strong);
+}
+
+.featureIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-md);
+  background-color: var(--color-pick-mine-wash);
+  color: var(--color-pick-mine);
+}
+
+/* ---------------------------------------------------------------- */
+/* Quiz callout                                                      */
+/* ---------------------------------------------------------------- */
+
+.quizCard {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--color-pick-mine-wash-strong);
+  background:
+    radial-gradient(circle at 88% 12%, rgba(215, 255, 43, 0.16), transparent 58%),
+    var(--color-surface-raised);
+}
+
+.quizLayout {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  align-items: flex-start;
+}
+
+@media (min-width: 800px) {
+  .quizLayout {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-6);
+  }
+}
+
+/* ---------------------------------------------------------------- */
+/* FAQ                                                               */
+/* ---------------------------------------------------------------- */
+
+.faqGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-5);
+}
+
+@media (min-width: 800px) {
+  .faqGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-5) var(--space-6);
+  }
+}
+
+.faqQuestion {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+/* ---------------------------------------------------------------- */
+/* Closing CTA                                                       */
+/* ---------------------------------------------------------------- */
+
+.ctaCard {
+  position: relative;
+  overflow: hidden;
+  text-align: center;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background:
+    radial-gradient(circle at 50% 0%, rgba(215, 255, 43, 0.18), transparent 62%),
+    var(--color-surface-raised);
+}
+
+.ctaTitle {
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.01em;
+  font-size: 32px;
+  line-height: 1.05;
+}
+
+@media (min-width: 900px) {
+  .ctaTitle {
+    font-size: 46px;
+  }
+}
+
+.ctaActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  justify-content: center;
+}
+
+/* ---------------------------------------------------------------- */
+/* Footer                                                            */
+/* ---------------------------------------------------------------- */
+
+.footer {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  background-color: var(--color-surface);
+}
+
+.footerInner {
+  width: 100%;
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: var(--space-6) var(--space-5);
+}
+
+@media (min-width: 900px) {
+  .footerInner {
+    padding: var(--space-7) var(--space-6);
+  }
+}
+
+.footerTop {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-6);
+}
+
+@media (min-width: 760px) {
+  .footerTop {
+    grid-template-columns: 1.4fr 1fr 1fr;
+  }
+}
+
+.footerHeading {
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 12px;
+  color: var(--color-text-dim);
+}
+
+.footerList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  list-style: none;
+}
+
+.footerLink {
+  color: var(--color-text);
+  font-size: 14px;
+  text-decoration: none;
+}
+
+.footerLink:hover {
+  color: var(--color-pick-mine);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.footerLink:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 3px;
+  border-radius: var(--radius-sm);
+}
+
+.footerBottom {
+  margin-top: var(--space-6);
+  padding-top: var(--space-4);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
