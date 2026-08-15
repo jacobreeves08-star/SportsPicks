@@ -34,7 +34,11 @@ Three environments, each with its own database and credentials — never shared.
 
 ## Database migrations
 
-Applied automatically on every deploy of the two web services, via `preDeployCommand: npm run migrate --workspace apps/api` in `render.yaml`. Render runs it against the newly built code, with that service's env, *before* shifting any traffic to it; a non-zero exit aborts the deploy and leaves the previous version serving. So a migration and the code that needs it always land together, and a broken migration never half-deploys.
+**Applied by the API itself, on boot** — `server.ts` awaits `applyMigrations()` before it opens its port. A failure is fatal, so the platform keeps the previous version serving rather than letting a new one answer against a half-migrated schema.
+
+Boot, rather than a deploy hook, because of where this actually runs: the live deployment is a **free** Render instance created by hand in the dashboard, and pre-deploy commands, cron services, and shell access are all paid features. Boot is the only hook that exists there, and a schema change that depends on someone remembering to run it by hand is one that eventually doesn't get run — which is exactly how the daily college quiz reached production against a database with none of its tables.
+
+`render.yaml` also sets `preDeployCommand` on its two web services, for a Blueprint-based deployment. The two are harmless together: an already-applied migration is a no-op.
 
 Two things about that command that are easy to get wrong:
 
@@ -43,7 +47,11 @@ Two things about that command that are easy to get wrong:
 
 The cron services deliberately don't run migrations — they share the database with the web service and would only race it.
 
-This was added after the daily college quiz shipped to a database with no `trivia_*` tables: nothing in the pipeline had ever run migrations, and every earlier one happened to have been applied by hand.
+## The college quiz's player pool
+
+Same constraint, same shape of answer. `nfl-athlete-ingest` is designed to run weekly as a cron service, but the free instance has no cron, so `lib/ensure-player-pool.ts` runs it once at startup **if the pool is completely empty** — fire-and-forget, after the port is open, with every failure swallowed and logged. It refreshes nothing and tops up nothing; one row is enough to skip it. A stale pool is fully playable, since a player's college never changes.
+
+This needs `SPORTS_API_PROVIDER=live` in the environment. Under the `mock` default the provider returns an empty list, the pool stays empty, and the quiz correctly reports `TRIVIA_UNAVAILABLE` forever.
 
 ## Setting `PUBLIC_API_URL`
 
