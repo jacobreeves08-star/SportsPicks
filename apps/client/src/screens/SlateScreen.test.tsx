@@ -74,6 +74,8 @@ function leagueDetail(overrides: Partial<LeagueWithMemberCount> = {}): LeagueWit
     timezone: "America/Chicago",
     seasonStart: "2026-01-01",
     pickHorizonDays: 7,
+    golfPickCount: 3,
+    golfTopN: 10,
     createdAt: "2026-08-01T00:00:00.000Z",
     updatedAt: "2026-08-01T00:00:00.000Z",
     memberCount: 4,
