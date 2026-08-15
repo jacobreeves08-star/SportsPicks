@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Stack, Text } from "../design-system/index.js";
-import { buildTriviaShareText, type TriviaShareInput } from "./build-trivia-share-text.js";
+import { buildTriviaShareHtml, buildTriviaShareText, type TriviaShareInput } from "./build-trivia-share-text.js";
 import styles from "./TriviaShareButton.module.css";
 
 export interface TriviaShareButtonProps extends TriviaShareInput {
@@ -34,6 +34,12 @@ export function TriviaShareButton({ puzzleNumber, results, url }: TriviaShareBut
         type="button"
         className={styles.buttonPrimary}
         onClick={() => {
+          // `url` stays its own field rather than being pasted onto the
+          // end of `text`: that's what lets Messages/WhatsApp/Slack
+          // recognize a link to unfurl, and turn it into a titled
+          // preview card built from index.html's Open Graph tags
+          // instead of a bare address.
+          //
           // Dismissing the sheet rejects with an AbortError — a user
           // changing their mind is not a failure to report.
           navigator.share({ title: "Pick'em College Quiz", text, url: shareUrl }).catch(() => {});
@@ -44,16 +50,35 @@ export function TriviaShareButton({ puzzleNumber, results, url }: TriviaShareBut
     );
   }
 
-  return <ShareFallback text={text} url={shareUrl} />;
+  return <ShareFallback input={{ puzzleNumber, results, url: shareUrl }} />;
 }
 
-function ShareFallback({ text, url }: { text: string; url: string }) {
+function ShareFallback({ input }: { input: TriviaShareInput & { url: string } }) {
   const [copied, setCopied] = useState(false);
-  const fullText = `${text}\n${url}`;
 
   async function handleCopy() {
+    // Two flavors on one clipboard write. A rich-text destination
+    // (Slack, Gmail, Notes, a doc) takes the HTML and shows a clickable
+    // "Play today's quiz →" with no visible URL; a plain-text one
+    // (SMS, a terminal, a code editor) takes the text/plain flavor,
+    // where a bare URL is the only thing a link CAN be.
+    const html = buildTriviaShareHtml(input);
+    const plain = `${buildTriviaShareText(input)}\n${input.url}`;
+
     try {
-      await navigator.clipboard.writeText(fullText);
+      if (typeof ClipboardItem !== "undefined" && typeof navigator.clipboard.write === "function") {
+        await navigator.clipboard.write([
+          new ClipboardItem({
+            "text/html": new Blob([html], { type: "text/html" }),
+            "text/plain": new Blob([plain], { type: "text/plain" }),
+          }),
+        ]);
+      } else {
+        // Older Safari/Firefox, and jsdom. Plain text is the flavor
+        // that matters most (it's what a text message gets anyway), so
+        // losing the anchor here costs the paste nothing it needed.
+        await navigator.clipboard.writeText(plain);
+      }
       setCopied(true);
     } catch {
       // Clipboard permission denied or unavailable. The text is on

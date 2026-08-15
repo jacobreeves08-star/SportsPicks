@@ -22,6 +22,44 @@
       rel="stylesheet"
     />
     <title>Sports Pick'em</title>
+
+    <!--
+      Link preview card. A shared quiz result is a link in someone
+      else's text message, and a bare address is the least persuasive
+      thing that link could be — Messages, WhatsApp, Slack and iMessage
+      all fetch these tags and render a titled card instead.
+
+      They live in this static HTML, not in a route component, on
+      purpose: the crawlers that build those cards do not execute
+      JavaScript, so tags injected at render time would never be seen.
+      That also means these are the tags for EVERY route, which is why
+      they describe the quiz — the one page in this app a stranger
+      actually gets linked to (docs/college-trivia.md's sharing
+      section). Every other route is behind a login.
+
+      No og:image, on purpose and not for want of an asset: the card is
+      meant to be a link with a line of copy, not a picture in someone's
+      thread. `twitter:card` is `summary` for the same reason —
+      `summary_large_image` is the one that wants a hero image. Don't
+      add one back without asking.
+    -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Sports Pick'em" />
+    <meta property="og:title" content="Think you know where they went to college?" />
+    <meta
+      property="og:description"
+      content="Five NFL players a day, five colleges each, one guess apiece. Everyone gets the same five — play free, no account needed."
+    />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="Think you know where they went to college?" />
+    <meta
+      name="twitter:description"
+      content="Five NFL players a day, five colleges each, one guess apiece. Everyone gets the same five — play free, no account needed."
+    />
+    <meta
+      name="description"
+      content="Daily college trivia and weekly pick'em leagues with your friends. Five NFL players a day — name the college each one went to."
+    />
   </head>
   <body>
     <!--

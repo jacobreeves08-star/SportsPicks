@@ -62,6 +62,15 @@ Two deliberate choices in [`trivia-stats.ts`](../apps/api/src/lib/trivia-stats.t
 
 `accuracyPct` is `null` (not `0`) when nothing has been answered — "no data" and "0% accuracy" are different things, and the profile renders them differently.
 
+## The result screen's voice
+
+The card gets less polite as the score drops — a perfect round is congratulated, a shutout is heckled — via `scoreVerdict()` in [`CollegeQuizScreen.tsx`](../apps/client/src/screens/trivia/CollegeQuizScreen.tsx). Six tiers, each a headline plus a one-line jab, and the score itself turns red below 60%. This is a trash-talk pick'em app whose whole sharing loop is comparing scores with friends; "Nice work" under a 1/5 is a lie, and a screen that praises every outcome identically says nothing about any of them.
+
+Two properties the copy has to keep:
+
+- **Deterministic.** The same round says the same thing on every render and after a refresh. Rotating through random taunts would mean the card someone screenshots isn't the card they get back — and would make the tiers untestable for no gain.
+- **Scored on the ratio, not the raw count**, so the tiers still land if `questionCount` (server-driven) is ever something other than five. The two tiers that name a number — "one away" and the blind-guessing jabs — are the exceptions, and they're gated on a count or hold at any count: with five options per question, guessing blind averages exactly one right, so 1/5 genuinely is par for someone who knows nothing and 0/5 genuinely is below it.
+
 ## Sharing
 
 One button, using the Web Share API when the browser has it (on a phone that one tap covers text message, every social app, and email at once), falling back to copy-to-clipboard on desktop. Same two-path structure as the existing [`ShareResultsButton`](../apps/client/src/app-shell/ShareResultsButton.tsx), and which UI renders is decided from `navigator.share`'s presence at render time rather than inside the click handler, so a test can mock the global to exercise either path.
@@ -70,14 +79,25 @@ The share text is **spoiler-safe by construction** — day number, score, and a 
 
 ```
 Pick'em College Quiz #14 — 4/5
-🟩🟩⬜🟩🟩
+🟩🟩🟥🟩🟩
 
-Which college did they go to? 🏈
+Five NFL players, five colleges each — think you can beat 4/5? 🏈
 ```
 
-The whole point of everyone getting the same five players is that a friend can play the *same* quiz; a share naming the players would ruin the thing it's advertising. The squares are built from a boolean per question, so there is no path by which a name could reach the text. Misses are white rather than red: this is a "how did you do" brag, and a wall of red reads as failure — the score is stated in numbers beside it either way.
+The whole point of everyone getting the same five players is that a friend can play the *same* quiz; a share naming the players would ruin the thing it's advertising. The squares are built from a boolean per question, so there is no path by which a name could reach the text.
+
+**Misses are red**, matching the miss color the result screen itself uses. Red/green is the one pairing red-green color blindness can't separate, so the row is never the only statement of the result — the score is spelled out in numbers on the line above, and that line is what the text leads with. (This replaced an earlier white square, chosen on the theory that a wall of red reads as failure. It does; that's the point.)
 
 The shared link points at `/college-quiz`, the **public** route, since the recipient may well have no account.
+
+### How the link is presented
+
+A raw address is the least persuasive thing that link could be, but **a text message is plain text** — there is no anchor text to be had there, and no amount of formatting changes that. So the link gets dressed up in the two places where it can be:
+
+- **The preview card.** `navigator.share` is given the URL as its own `url` field rather than pasted onto the end of the text, which is what lets Messages/WhatsApp/Slack recognize it as a link to unfurl. The card's copy comes from the Open Graph tags in [`index.html`](../apps/client/index.html) — deliberately in the static HTML, since the crawlers that build those cards don't execute JavaScript, and deliberately describing the quiz, since every other route in this app is behind a login. There is deliberately no `og:image`, and `twitter:card` is `summary` rather than `summary_large_image` for the same reason: the card is meant to be a link carrying a line of copy, not a picture taking over someone's thread.
+- **The rich-text flavor.** The copy button writes *two* clipboard flavors in one `ClipboardItem` — `text/html` with a real `<a>` reading "Play today's quiz →" and no visible address, plus `text/plain` where the URL is spelled out. Paste into Slack, Gmail, or Notes and you get the clickable label; paste into a text message and you get the plain version, which is all a text message can hold anyway. Where `ClipboardItem` doesn't exist (older Safari/Firefox, jsdom) it falls back to `writeText` with the plain flavor.
+
+The URL is escaped on its way into the HTML flavor. It's app-composed from `window.location.origin`, but the output lands on a system clipboard and is pasted into other people's applications, which is not the place to be relying on that.
 
 ## Player data
 

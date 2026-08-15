@@ -6,7 +6,7 @@ import { answerDailyTrivia } from "../../api/endpoints.js";
 import { ApiError } from "../../api/errors.js";
 import { MaybeShell } from "../../app-shell/MaybeShell.js";
 import type { DailyTrivia, TriviaAnswerResponse, TriviaQuestion } from "../../api/types.js";
-import { ErrorState, LoadingState, NumericText, Stack, Surface, Text } from "../../design-system/index.js";
+import { ErrorState, LoadingState, NumericText, Stack, Surface, Text, type TextColor } from "../../design-system/index.js";
 import { queryKeys } from "../../query/keys.js";
 import { useDailyTrivia } from "../../query/hooks/use-daily-trivia.js";
 import { readGuestAttempt, recordGuestAnswer } from "../../trivia/guest-attempt-store.js";
@@ -340,6 +340,7 @@ function ResultCard({
   isAuthenticated: boolean;
 }) {
   const correct = results.filter(Boolean).length;
+  const verdict = scoreVerdict(correct, results.length);
 
   return (
     <Stack gap={4} className={styles.screen}>
@@ -347,11 +348,16 @@ function ResultCard({
 
       <Surface variant="raised" radius="lg" padding={5} elevation={2}>
         <Stack gap={4} align="center">
-          <Text as="h2" size="lg" weight="bold">
-            {scoreHeadline(correct, results.length)}
-          </Text>
+          <Stack gap={1} align="center">
+            <Text as="h2" size="lg" weight="bold">
+              {verdict.headline}
+            </Text>
+            <Text as="p" size="sm" color="dim" className={styles.jab}>
+              {verdict.jab}
+            </Text>
+          </Stack>
 
-          <NumericText size="xl" weight="bold" color={correct === results.length ? "hit" : "default"}>
+          <NumericText size="xl" weight="bold" color={verdict.scoreColor}>
             {correct}/{results.length}
           </NumericText>
 
@@ -387,9 +393,55 @@ function ResultCard({
   );
 }
 
-function scoreHeadline(correct: number, total: number): string {
-  if (correct === total) return "Perfect round";
-  if (correct === 0) return "Rough one";
-  if (correct >= total - 1) return "So close";
-  return "Nice work";
+interface ScoreVerdict {
+  headline: string;
+  /** The second line. Where the escalation actually lives — a headline
+   * has room for a reaction, not for a reason. */
+  jab: string;
+  scoreColor: TextColor;
+}
+
+/**
+ * The result screen's voice, sharpening as the score drops: a perfect
+ * round is congratulated, a bad one is heckled. This is a trash-talk
+ * pick'em app played against friends who will see the shared square
+ * grid anyway — "Nice work" under a 1/5 is a lie, and a screen that
+ * praises every outcome equally says nothing about any of them.
+ *
+ * Two properties this has to keep:
+ *
+ *  - **Deterministic.** The same round says the same thing on every
+ *    render and after a refresh. Rotating through random taunts would
+ *    mean the card someone screenshots isn't the card they get back,
+ *    and it would make this untestable for no gain.
+ *  - **Scored on the ratio, not the raw count**, so the tiers still
+ *    land if a puzzle ever ships with a question count other than five
+ *    (`questionCount` is server-driven, not a client constant).
+ *
+ * The bottom two tiers are the only ones that make a claim: with five
+ * options per question, guessing blind averages exactly one right, so
+ * 1/5 really is par for someone who knows nothing and 0/5 really is
+ * below it. It's a burn that happens to be arithmetic.
+ */
+function scoreVerdict(correct: number, total: number): ScoreVerdict {
+  if (correct === total) {
+    return { headline: "Perfect round", jab: "Nothing to teach you. See you tomorrow.", scoreColor: "hit" };
+  }
+  // Checked as a count rather than a ratio because the copy names it:
+  // "one away" has to actually mean one away at any question count.
+  if (total - correct === 1) {
+    return { headline: "So close", jab: "One away. That one's going to bug you all day.", scoreColor: "default" };
+  }
+  if (correct === 0) {
+    return { headline: "Total shutout", jab: "Zero. Blind guessing would have beaten you.", scoreColor: "miss" };
+  }
+
+  const ratio = correct / total;
+  if (ratio >= 0.6) {
+    return { headline: "You'll take it", jab: "More right than wrong. Not by much.", scoreColor: "default" };
+  }
+  if (ratio >= 0.4) {
+    return { headline: "Rough day", jab: "Not your day. Maybe watch a game this weekend.", scoreColor: "miss" };
+  }
+  return { headline: "Yikes", jab: "About what blind guessing averages.", scoreColor: "miss" };
 }

@@ -140,6 +140,15 @@
   flex-shrink: 0;
 }
 
+/* --- Result card ---------------------------------------------------- */
+
+.jab {
+  text-align: center;
+  /* Sits under a bold headline it must not compete with — this is the
+     aside, not the verdict. */
+  text-wrap: balance;
+}
+
 /* --- Next ----------------------------------------------------------- */
 
 .nextButton {

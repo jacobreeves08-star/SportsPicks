@@ -84,6 +84,25 @@ function graded(questionId: string, selectedIndex: number, overrides: Partial<Tr
   };
 }
 
+/** A finished five-question round with `correctCount` of them right —
+ * the shortest way onto the result card without playing through it. */
+function completedRound(correctCount: number): Partial<DailyTrivia> {
+  return {
+    tracked: true,
+    attempt: {
+      correctCount,
+      answeredCount: 5,
+      completed: true,
+      answers: Array.from({ length: 5 }, (_, i) => ({
+        questionId: `q${i + 1}`,
+        selectedIndex: i < correctCount ? 0 : 2,
+        isCorrect: i < correctCount,
+        correctIndex: 0,
+      })),
+    },
+  };
+}
+
 async function mockShell() {
   const { getMe, getMyLeagues, getDataFreshness, pingHealth } = await import("../../api/endpoints.js");
   vi.mocked(getMe).mockResolvedValue(PROFILE);
@@ -274,6 +293,42 @@ describe("CollegeQuizScreen — playing logged in", () => {
 
     expect(await screen.findByText("4/5")).toBeInTheDocument();
     expect(screen.queryByText(/which college did he attend/i)).not.toBeInTheDocument();
+  });
+});
+
+describe("CollegeQuizScreen — the result sharpens as the score drops", () => {
+  it.each([
+    [5, /perfect round/i],
+    [4, /so close/i],
+    [3, /you'll take it/i],
+    [2, /rough day/i],
+    [1, /yikes/i],
+    [0, /total shutout/i],
+  ])("gives %i/5 its own verdict", async (correctCount, headline) => {
+    const { getDailyTrivia } = await import("../../api/endpoints.js");
+    vi.mocked(getDailyTrivia).mockResolvedValue(daily(completedRound(correctCount)));
+
+    await renderRouteAt("/college-quiz");
+
+    expect(await screen.findByRole("heading", { name: headline })).toBeInTheDocument();
+  });
+
+  it("heckles a shutout instead of consoling it", async () => {
+    const { getDailyTrivia } = await import("../../api/endpoints.js");
+    vi.mocked(getDailyTrivia).mockResolvedValue(daily(completedRound(0)));
+
+    await renderRouteAt("/college-quiz");
+
+    expect(await screen.findByText(/blind guessing would have beaten you/i)).toBeInTheDocument();
+  });
+
+  it("is the ONE outcome that gets a compliment", async () => {
+    const { getDailyTrivia } = await import("../../api/endpoints.js");
+    vi.mocked(getDailyTrivia).mockResolvedValue(daily(completedRound(5)));
+
+    await renderRouteAt("/college-quiz");
+
+    expect(await screen.findByText(/nothing to teach you/i)).toBeInTheDocument();
   });
 });
 
