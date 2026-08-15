@@ -1,133 +1,28 @@
 /**
- * The logged-out home page. Structurally a copy of
- * `auth/LoginScreen.module.css`'s two-pane layout on purpose — the two
- * screens are the app's front door for the same visitor and must read
- * as one product. The right pane holds the quiz CTA instead of a login
- * form; everything else (hero, rings, brand, pills) is the same
- * treatment.
+ * The logged-out home page's own styles — only what's unique to it.
+ *
+ * This file used to hold a hand-maintained copy of
+ * `auth/LoginScreen.module.css`'s entire two-pane layout, with a
+ * comment calling that duplication deliberate. It wasn't survivable:
+ * the marketing redesign landed on the login copy and not this one, so
+ * for one release the app's two logged-out front doors looked like
+ * different products. The page shell, hero, and hero-card rules now
+ * live once in `marketing/Marketing.module.css` and both screens read
+ * them from there.
  */
-.page {
-  min-height: 100vh;
-  min-height: 100dvh;
-  display: grid;
-  grid-template-columns: 1fr;
-  background-color: var(--color-surface);
-}
 
-@media (min-width: 900px) {
-  .page {
-    grid-template-columns: 1.1fr 1fr;
-  }
-}
-
-.hero {
-  position: relative;
-  display: flex;
-  align-items: center;
-  padding: var(--space-6) var(--space-5) var(--space-5);
-  overflow: hidden;
-  background: radial-gradient(circle at 20% 15%, rgba(215, 255, 43, 0.12), transparent 55%), var(--color-surface);
-}
-
-@media (min-width: 900px) {
-  .hero {
-    padding: var(--space-8);
-  }
-}
-
-/* Purely decorative "target rings", bleeding off the top-right corner
-   so they never sit behind body text. aria-hidden in the markup. */
-.ring {
-  position: absolute;
-  border-radius: 50%;
-  border: 1.5px solid rgba(215, 255, 43, 0.16);
-  pointer-events: none;
-}
-
-.ringOuter {
-  width: 520px;
-  height: 520px;
-  top: -180px;
-  right: -220px;
-}
-
-.ringInner {
-  width: 320px;
-  height: 320px;
-  top: -80px;
-  right: -120px;
-  border-color: rgba(215, 255, 43, 0.24);
-}
-
-.heroContent {
-  position: relative;
-  z-index: 1;
-  max-width: 440px;
-}
-
-.brand {
+.cardEyebrow {
   font-family: var(--font-display);
   text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 11px;
   color: var(--color-pick-mine);
-  font-size: 28px;
-  letter-spacing: 0.02em;
-}
-
-.headline {
-  font-family: var(--font-display);
-  text-transform: uppercase;
-  color: var(--color-text);
-  font-size: 40px;
-  line-height: 1.05;
-  letter-spacing: 0.01em;
-  margin: 0;
-}
-
-@media (min-width: 900px) {
-  .headline {
-    font-size: 52px;
-  }
-}
-
-.tagline {
-  max-width: 38ch;
-}
-
-.pill {
-  display: inline-flex;
-  align-items: center;
-  padding: var(--space-1) var(--space-3);
-  border-radius: var(--radius-full);
-  background-color: var(--color-pick-mine-wash);
-  color: var(--color-pick-mine);
-  font-family: var(--font-display);
-  text-transform: uppercase;
-  font-size: 12px;
-  letter-spacing: 0.04em;
-}
-
-.panel {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: var(--space-4);
-  padding: var(--space-5);
-}
-
-.card {
-  width: 100%;
-  max-width: 420px;
-  margin: 0 auto;
-}
-
-.cardTitle {
-  font-family: var(--font-display);
-  text-transform: uppercase;
-  letter-spacing: 0.01em;
 }
 
 /* The primary action on this page — the one thing a stranger can do
-   without an account. */
+   without an account. Solid lime, unlike the login page's outlined
+   quiz teaser: there's no login form competing with it here, so this
+   is unambiguously the hero's primary action. */
 .playButton {
   display: inline-flex;
   align-items: center;
@@ -151,39 +46,6 @@
 }
 
 .playButton:focus-visible {
-  outline: 2px solid var(--color-focus-ring);
-  outline-offset: 2px;
-}
-
-.authRow {
-  width: 100%;
-  max-width: 420px;
-  margin: 0 auto;
-}
-
-.authButton,
-.authButtonSecondary {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: 1;
-  min-height: 44px;
-  padding: var(--space-2) var(--space-4);
-  border-radius: var(--radius-md);
-  border: 1.5px solid var(--color-border);
-  color: var(--color-text);
-  font-weight: 600;
-  text-decoration: none;
-  transition: border-color var(--motion-duration-fast) var(--motion-ease);
-}
-
-.authButton:hover,
-.authButtonSecondary:hover {
-  border-color: var(--color-pick-mine);
-}
-
-.authButton:focus-visible,
-.authButtonSecondary:focus-visible {
   outline: 2px solid var(--color-focus-ring);
   outline-offset: 2px;
 }

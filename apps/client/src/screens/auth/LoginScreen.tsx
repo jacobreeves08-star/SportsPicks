@@ -9,6 +9,7 @@ import { navigateAfterLogin } from "../../routes/post-login-redirect.js";
 import { FormField } from "../FormField.js";
 import { presentApiError } from "../present-api-error.js";
 import authFormStyles from "../StandaloneForm.module.css";
+import shell from "../marketing/Marketing.module.css";
 import styles from "./LoginScreen.module.css";
 
 /**
@@ -53,36 +54,38 @@ export function LoginScreen() {
   const error = mutation.isError ? presentApiError(mutation.error) : undefined;
 
   return (
-    <div className={styles.page}>
+    <div className={shell.page}>
       {/* The page is long now, and the one thing a returning visitor
           came here to do is at the end of the header's tab order. This
           is the standard fix, and it's the first focusable element on
           the page. */}
-      <a href="#login" className={styles.skipLink}>
+      <a href="#login" className={shell.skipLink}>
         Skip to log in
       </a>
 
-      <MarketingHeader returnTo={returnTo} />
+      {/* `loginAction="anchor"` because this is the one page that
+          actually HAS a #login card to jump to. */}
+      <MarketingHeader returnTo={returnTo} loginAction="anchor" />
 
       <main>
-        <section className={styles.hero} aria-labelledby="hero-title">
+        <section className={shell.hero} aria-labelledby="hero-title">
           {/* Decorative "target rings" standing in for a scoreboard/ball
               motif — no image assets in this repo, and no real team
               logos here (this is generic marketing chrome, not a game),
               so an abstract shape carries the sports energy instead. */}
-          <span className={`${styles.ring} ${styles.ringOuter}`} aria-hidden="true" />
-          <span className={`${styles.ring} ${styles.ringInner}`} aria-hidden="true" />
+          <span className={`${shell.ring} ${shell.ringOuter}`} aria-hidden="true" />
+          <span className={`${shell.ring} ${shell.ringInner}`} aria-hidden="true" />
 
-          <div className={styles.heroInner}>
-            <Stack gap={5} className={styles.heroContent}>
-              <span className={styles.heroBadge}>Free · No spreads · No strangers</span>
+          <div className={shell.heroInner}>
+            <Stack gap={5} className={shell.heroContent}>
+              <span className={shell.heroBadge}>Free · No spreads · No strangers</span>
               <Stack gap={3}>
-                <h1 id="hero-title" className={styles.headline}>
+                <h1 id="hero-title" className={shell.headline}>
                   Pick your winners.
                   <br />
                   Own the week.
                 </h1>
-                <Text as="p" color="dim" className={styles.tagline}>
+                <Text as="p" color="dim" className={shell.tagline}>
                   Weekly pick&rsquo;em leagues across football, basketball, baseball, hockey, soccer, tennis, MMA, and
                   golf — go head-to-head with your own friends, not strangers.
                 </Text>
@@ -91,9 +94,9 @@ export function LoginScreen() {
                 {/* Keep in sync with SPORT_OPTIONS (src/leagues/sports.ts) —
                     11 ESPN-backed codes plus golf, which runs on its own
                     tournament pipeline. */}
-                <span className={styles.pill}>12 sports</span>
-                <span className={styles.pill}>Friend leagues</span>
-                <span className={styles.pill}>Live standings</span>
+                <span className={shell.pill}>12 sports</span>
+                <span className={shell.pill}>Friend leagues</span>
+                <span className={shell.pill}>Live standings</span>
               </Stack>
 
               {/* The daily quiz gets hero billing because it's the only
@@ -125,7 +128,7 @@ export function LoginScreen() {
               </div>
             </Stack>
 
-            <div className={styles.formSide}>
+            <div className={shell.heroCardSide}>
               {/* `tabIndex={-1}` is what makes the skip link and every
                   "#login" jump on this page actually move FOCUS here,
                   not just the scroll position — a keyboard user
@@ -140,7 +143,7 @@ export function LoginScreen() {
                 radius="lg"
                 elevation={2}
                 padding={5}
-                className={styles.card}
+                className={shell.heroCard}
               >
                 <Stack gap={4}>
                   <Stack gap={1}>
@@ -148,7 +151,7 @@ export function LoginScreen() {
                         page's one h1 now. The heading level is the only
                         thing that changed; this is still the form's own
                         labelled section. */}
-                    <Text as="h2" id="login-title" size="lg" weight="bold" className={styles.cardTitle}>
+                    <Text as="h2" id="login-title" size="lg" weight="bold" className={shell.heroCardTitle}>
                       Log in
                     </Text>
                     <Text as="p" color="dim" size="sm">
@@ -203,7 +206,7 @@ export function LoginScreen() {
           </div>
         </section>
 
-        <MarketingSections returnTo={returnTo} />
+        <MarketingSections returnTo={returnTo} loginAction="anchor" />
       </main>
 
       <MarketingFooter returnTo={returnTo} />

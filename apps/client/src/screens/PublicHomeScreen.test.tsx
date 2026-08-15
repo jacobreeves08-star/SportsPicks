@@ -1,4 +1,4 @@
-import { screen } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import { axe } from "jest-axe";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { resetAuthStoreForTests, setAuthTokens } from "../api/auth-store.js";
@@ -78,19 +78,56 @@ describe("`/` for a logged-out visitor", () => {
     expect(await screen.findByRole("heading", { name: /pick your winners/i })).toBeInTheDocument();
   });
 
-  it("offers the quiz as the primary action, with no account required", async () => {
+  it("offers the quiz as the hero's primary action, with no account required", async () => {
     await renderRouteAt("/");
+    await screen.findByRole("heading", { name: /pick your winners/i });
 
-    const play = await screen.findByRole("link", { name: /play today.s quiz/i });
+    const hero = document.querySelector<HTMLElement>('section[aria-labelledby="hero-title"]');
+    expect(hero).not.toBeNull();
+    const play = within(hero as HTMLElement).getByRole("link", { name: /play now/i });
     expect(play).toHaveAttribute("href", "/college-quiz");
-    expect(screen.getByText(/no account needed/i)).toBeInTheDocument();
+    expect(within(hero as HTMLElement).getByText(/no account needed/i)).toBeInTheDocument();
   });
 
   it("still offers log in and sign up", async () => {
     await renderRouteAt("/");
 
+    // Both live in the marketing header now rather than a button row
+    // under the quiz card — this page's hero card is the quiz, and the
+    // account actions are chrome that follows the visitor down the
+    // whole page instead of scrolling away.
     expect(await screen.findByRole("link", { name: /^log in$/i })).toHaveAttribute("href", "/login");
-    expect(screen.getByRole("link", { name: /^sign up$/i })).toHaveAttribute("href", "/signup");
+    expect(screen.getByRole("link", { name: /^sign up free$/i })).toHaveAttribute("href", "/signup");
+  });
+
+  it("renders the same marketing site /login does, not a second design", async () => {
+    // The regression this test exists for actually shipped: the
+    // marketing redesign landed on /login only, so a visitor typing
+    // the bare domain got a completely different-looking product.
+    // Both pages now compose the same MarketingSections, and these
+    // ids are the cheapest proof that neither has quietly forked.
+    await renderRouteAt("/");
+    await screen.findByRole("heading", { name: /pick your winners/i });
+
+    for (const id of ["how-it-works", "sports", "features", "faq"]) {
+      expect(document.getElementById(id)).not.toBeNull();
+    }
+    expect(document.querySelector("header")).not.toBeNull();
+    expect(document.querySelector("footer")).not.toBeNull();
+  });
+
+  it("has no dead in-page anchors — every '#' link has a target here", async () => {
+    // The chrome is shared with /login, which HAS a #login card; this
+    // page doesn't, so anything hard-coded to jump to one would be a
+    // link that silently does nothing.
+    await renderRouteAt("/");
+    await screen.findByRole("heading", { name: /pick your winners/i });
+
+    const hashLinks = Array.from(document.querySelectorAll<HTMLAnchorElement>('a[href^="#"]'));
+    expect(hashLinks.length).toBeGreaterThan(0);
+    for (const link of hashLinks) {
+      expect(document.getElementById(link.getAttribute("href")!.slice(1))).not.toBeNull();
+    }
   });
 
   it("never calls an authenticated endpoint — a logged-out visitor has no session to use", async () => {

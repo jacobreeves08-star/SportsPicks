@@ -11,6 +11,7 @@ import {
   Text,
   UserIcon,
 } from "../../design-system/index.js";
+import type { MarketingLoginAction } from "./MarketingHeader.js";
 import {
   MARKETING_FAQS,
   MARKETING_FEATURES,
@@ -38,6 +39,9 @@ export interface MarketingSectionsProps {
   /** Same pass-through as `MarketingHeader` — every signup link on the
    * page carries the visitor's original destination. */
   returnTo?: string;
+  /** Same contract as `MarketingHeader`'s, for the closing CTA's
+   * "I already have an account" — see `MarketingLoginAction`. */
+  loginAction?: MarketingLoginAction;
 }
 
 /**
@@ -53,7 +57,7 @@ export interface MarketingSectionsProps {
  * read as one product; sharing the sections is what makes that true by
  * construction instead of by discipline.
  */
-export function MarketingSections({ returnTo }: MarketingSectionsProps) {
+export function MarketingSections({ returnTo, loginAction = "route" }: MarketingSectionsProps) {
   return (
     <>
       {/* No heading of its own — this is a proof strip attached to the
@@ -237,9 +241,19 @@ export function MarketingSections({ returnTo }: MarketingSectionsProps) {
               >
                 Create your league
               </Link>
-              <a href="#login" className={`${styles.buttonSecondary} ${styles.buttonLarge}`}>
-                I already have an account
-              </a>
+              {loginAction === "anchor" ? (
+                <a href="#login" className={`${styles.buttonSecondary} ${styles.buttonLarge}`}>
+                  I already have an account
+                </a>
+              ) : (
+                <Link
+                  to="/login"
+                  search={{ returnTo }}
+                  className={`${styles.buttonSecondary} ${styles.buttonLarge}`}
+                >
+                  I already have an account
+                </Link>
+              )}
             </div>
           </Stack>
         </Surface>
