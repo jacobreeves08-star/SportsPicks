@@ -149,4 +149,18 @@ Two 503s mean "today's puzzle can't be built from the pool yet", and the client 
 - `TRIVIA_UNAVAILABLE` — fewer than five athletes in the pool (typically: it has never been ingested or seeded).
 - `TRIVIA_POOL_TOO_SMALL` — enough athletes, but fewer than five distinct colleges between them, so a question can't be given four plausible wrong options.
 
-Both are 503s with their own codes rather than 500s because nothing is broken — the data just isn't there yet. The distinction tells an operator which thing to go fix and tells a player nothing, which is why the client treats them as one case (`QUIZ_NOT_READY_CODES` in [`CollegeQuizScreen.tsx`](../apps/client/src/screens/trivia/CollegeQuizScreen.tsx)).
+Both are 503s with their own codes rather than 500s because nothing is broken — the data just isn't there yet. The distinction tells an operator which thing to go fix and tells a player nothing, which is why the client treats them as one case (`NOT_READY_CODES` in [`api/errors.ts`](../apps/client/src/api/errors.ts)).
+
+### What the screen shows when the load fails
+
+`GET /trivia/daily` is the first request a visitor with no account ever makes — from the marketing home page, or from a shared result link — so it is the one place where a single unlucky request must not become a dead end. The failures are told apart rather than collapsed into one message, because they need opposite things from whoever is reading:
+
+| What happened | What it says | Retried automatically? |
+|---|---|---|
+| A `NOT_READY_CODES` 503 | "No quiz today — check back soon", no Retry button | No. Nothing is broken and no number of attempts builds a puzzle out of an empty pool. |
+| The request never reached the API (offline mid-request, DNS, CORS, or a proxy's HTML error page in front of an instance that isn't serving yet) | "Couldn't reach the server. Check your connection." | Yes — three attempts with backoff, then a Retry button. |
+| The API answered with a 5xx | "Couldn't load today's quiz." | Yes, same three attempts. |
+| A 4xx | "Couldn't load today's quiz." | No — the request itself is what's wrong; it will fail identically every time. |
+| The device is offline before the request goes out | "You're offline. Today's quiz will load when you're back.", no Retry button | The request is *paused*, not failed, and resumes by itself when the browser reports a connection. |
+
+The retry decision lives in one place for the whole app — `shouldRetryQuery` in [`query/query-client.ts`](../apps/client/src/query/query-client.ts) — and the not-ready codes are excluded there, by code. That exclusion is what lets this query keep the ordinary retry policy: it previously set `retry: false` to avoid hammering the endpoint over an unbuilt puzzle, which also threw away the retry that recovers from a dropped connection or an API instance that was still waking up. A transient failure now heals without the visitor doing anything; "check back soon" still costs exactly one request.

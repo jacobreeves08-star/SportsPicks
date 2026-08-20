@@ -1,9 +1,10 @@
+import { onlineManager } from "@tanstack/react-query";
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { axe } from "jest-axe";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { resetAuthStoreForTests, setAuthTokens } from "../../api/auth-store.js";
-import { ApiError } from "../../api/errors.js";
+import { ApiError, networkError, parseError } from "../../api/errors.js";
 import type { DailyTrivia, OpsSummary, TriviaAnswerResponse, UserProfile } from "../../api/types.js";
 import { resetCurrentLeagueForTests } from "../../leagues/current-league-store.js";
 import { resetGuestAttemptForTests } from "../../trivia/guest-attempt-store.js";
@@ -120,6 +121,9 @@ async function answerAndAdvance(user: ReturnType<typeof userEvent.setup>, colleg
 
 beforeEach(async () => {
   vi.clearAllMocks();
+  // Global to TanStack Query, so the offline case below would leak
+  // into every test that ran after it.
+  onlineManager.setOnline(true);
   resetAuthStoreForTests();
   resetCurrentLeagueForTests();
   resetGuestAttemptForTests();
@@ -368,6 +372,44 @@ describe("CollegeQuizScreen — unhappy paths", () => {
 
     expect(await screen.findByText(/couldn't load today's quiz/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /try again/i })).toBeInTheDocument();
+  });
+
+  it("says the SERVER couldn't be reached when the request never got there", async () => {
+    const { getDailyTrivia } = await import("../../api/endpoints.js");
+    vi.mocked(getDailyTrivia).mockRejectedValue(networkError(new Error("Failed to fetch")));
+
+    await renderRouteAt("/college-quiz");
+
+    // Not "couldn't load the quiz": nothing is wrong with the quiz,
+    // and this is the one failure the reader can act on themselves.
+    expect(await screen.findByText(/couldn't reach the server/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /try again/i })).toBeInTheDocument();
+  });
+
+  it("treats a response that wasn't the API's envelope as unreachable, not as a broken quiz", async () => {
+    const { getDailyTrivia } = await import("../../api/endpoints.js");
+    // A proxy's HTML error page in front of an API that isn't serving
+    // yet — the request never reached the app.
+    vi.mocked(getDailyTrivia).mockRejectedValue(parseError(502, new SyntaxError("Unexpected token '<'")));
+
+    await renderRouteAt("/college-quiz");
+
+    expect(await screen.findByText(/couldn't reach the server/i)).toBeInTheDocument();
+  });
+
+  it("says so when the device is offline instead of loading forever", async () => {
+    const { getDailyTrivia } = await import("../../api/endpoints.js");
+    // Never resolves — offline, TanStack Query pauses the request
+    // rather than sending and failing it, so there is no error to
+    // render and nothing in flight.
+    vi.mocked(getDailyTrivia).mockReturnValue(new Promise(() => {}));
+    onlineManager.setOnline(false);
+
+    await renderRouteAt("/college-quiz");
+
+    expect(await screen.findByText(/you're offline/i)).toBeInTheDocument();
+    // No Retry: the query resumes by itself when the connection does.
+    expect(screen.queryByRole("button", { name: /try again/i })).not.toBeInTheDocument();
   });
 
   it("surfaces a failed answer submission without losing the round", async () => {

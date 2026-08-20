@@ -113,3 +113,24 @@ export function parseError(status: number, cause: unknown): ApiError {
   const message = cause instanceof Error ? cause.message : "Failed to parse response";
   return new ApiError({ code: "PARSE_ERROR", message }, status);
 }
+
+/**
+ * Codes that mean "this can't be produced YET", as opposed to "the
+ * request failed". Nothing is broken and nothing about the request is
+ * wrong — the server simply has no data to build the response from
+ * (both of these are the college quiz's 503s: the player pool hasn't
+ * been ingested, or it's too thin to fill five options).
+ *
+ * Kept here, next to the code union that documents them, because two
+ * unrelated places have to agree on this list and must not drift:
+ * `query/query-client.ts` refuses to retry them (a retry genuinely
+ * cannot fix either one, and the retry policy otherwise treats every
+ * 5xx as transient), and the screen renders them as "check back soon"
+ * rather than as a failure.
+ */
+export const NOT_READY_CODES: ReadonlySet<string> = new Set(["TRIVIA_UNAVAILABLE", "TRIVIA_POOL_TOO_SMALL"]);
+
+/** True for a "not ready yet" response — see `NOT_READY_CODES`. */
+export function isNotReady(error: unknown): boolean {
+  return error instanceof ApiError && NOT_READY_CODES.has(error.code);
+}

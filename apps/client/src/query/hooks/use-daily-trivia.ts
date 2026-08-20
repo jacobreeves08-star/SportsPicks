@@ -19,10 +19,16 @@ export function useDailyTrivia() {
     queryKey: queryKeys.dailyTrivia(),
     queryFn: getDailyTrivia,
     staleTime: Infinity,
-    // A 503 here is "the player pool hasn't been ingested yet", which
-    // retrying cannot fix — the screen shows a "check back soon"
-    // message instead of hammering the endpoint.
-    retry: false,
+    // Retry is deliberately NOT overridden here. The two "not ready"
+    // 503s this endpoint can return are already excluded from the
+    // app-wide retry policy by code (`shouldRetryQuery`), so the
+    // hammering this hook used to prevent by refusing to retry at all
+    // can't happen — while a genuinely transient failure (a dropped
+    // connection, an API instance still waking up, a one-off 500)
+    // still gets the same three backed-off attempts every other query
+    // in the app gets. This is the first request a visitor with no
+    // account ever makes, so one unlucky attempt must not be the
+    // whole story they see.
   });
 }
 

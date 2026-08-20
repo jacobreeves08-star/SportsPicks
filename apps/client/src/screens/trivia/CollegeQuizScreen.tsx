@@ -3,7 +3,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { getAuthState } from "../../api/auth-store.js";
 import { answerDailyTrivia } from "../../api/endpoints.js";
-import { ApiError } from "../../api/errors.js";
+import { ApiError, isNotReady } from "../../api/errors.js";
 import { MaybeShell } from "../../app-shell/MaybeShell.js";
 import type { DailyTrivia, TriviaAnswerResponse, TriviaQuestion } from "../../api/types.js";
 import { ErrorState, LoadingState, NumericText, Stack, Surface, Text, type TextColor } from "../../design-system/index.js";
@@ -48,15 +48,8 @@ export function CollegeQuizPage() {
   );
 }
 
-/**
- * The server codes that mean "there is no puzzle today", as opposed to
- * "loading it failed" — see api/errors.ts. Both are 503s the pool
- * simply isn't ready for; neither is something a retry can fix.
- */
-const QUIZ_NOT_READY_CODES: ReadonlySet<string> = new Set(["TRIVIA_UNAVAILABLE", "TRIVIA_POOL_TOO_SMALL"]);
-
 export function CollegeQuizScreen() {
-  const { data, isLoading, isError, error, refetch } = useDailyTrivia();
+  const { data, isLoading, isError, error, refetch, fetchStatus } = useDailyTrivia();
 
   if (isLoading) return <LoadingState rows={4} label="Loading today's quiz" />;
 
@@ -64,7 +57,9 @@ export function CollegeQuizScreen() {
     // A 503 here is "the player pool can't produce a puzzle yet" —
     // nothing is broken and retrying won't help, so say that instead
     // of showing a generic failure with a Retry button that can't work.
-    if (error instanceof ApiError && QUIZ_NOT_READY_CODES.has(error.code)) {
+    // (`isNotReady` is also what keeps the app-wide retry policy from
+    // hammering this endpoint — api/errors.ts.)
+    if (isNotReady(error)) {
       return (
         <Surface variant="raised" radius="lg" padding={5}>
           <Stack gap={2} align="center">
@@ -76,7 +71,31 @@ export function CollegeQuizScreen() {
         </Surface>
       );
     }
+    // Never reaching the API at all is a different problem from the
+    // API failing, and it's the one the person reading this can
+    // actually do something about — a phone that dropped its
+    // connection, a captive wifi portal, an API that isn't up.
+    // Saying "couldn't load the quiz" for it sends them looking for a
+    // broken quiz that isn't broken. `isNetworkFailure` also covers a
+    // response that wasn't the API's own JSON envelope at all (a
+    // proxy's HTML error page while an instance wakes) — same story
+    // from here: the request never reached the app.
+    if (error instanceof ApiError && error.isNetworkFailure) {
+      return <ErrorState message="Couldn't reach the server. Check your connection." onRetry={() => void refetch()} />;
+    }
     return <ErrorState message="Couldn't load today's quiz." onRetry={() => void refetch()} />;
+  }
+
+  // Offline, with nothing cached to fall back on: TanStack Query has
+  // PAUSED the request rather than failing it (networkMode "online"),
+  // so there is no error to render and nothing is in flight either.
+  // Without this the screen sits on its loading skeleton forever,
+  // claiming to be loading something it has deliberately not asked
+  // for. No Retry button on purpose — the query resumes by itself the
+  // moment the browser reports a connection, which is sooner than
+  // anyone would get round to pressing it.
+  if (!data && fetchStatus === "paused") {
+    return <ErrorState message="You're offline. Today's quiz will load when you're back." />;
   }
 
   if (!data) return <LoadingState rows={4} label="Loading today's quiz" />;
