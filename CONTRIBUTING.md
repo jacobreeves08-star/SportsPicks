@@ -2,7 +2,17 @@
 
 ## Running tests locally
 
-`npm test` requires local Postgres running (`docker compose up -d`, then `npm run db:migrate --workspace apps/api` — see README). Most tests are integration tests against a real database (session lifecycle, authorization checks, full route flows via `app.inject()`), not pure units — this matches what CI's `test` job does against its own throwaway Postgres service container.
+`npm test` requires local Postgres running (`docker compose up -d`). Most tests are integration tests against a real database (session lifecycle, authorization checks, full route flows via `app.inject()`), not pure units — this matches what CI's `test` job does against its own throwaway Postgres service container.
+
+Those tests **truncate every table**, so they run against their own database and never the dev one. Create it once:
+
+```bash
+docker compose exec postgres createdb -U postgres sports_pickem_test
+```
+
+`.env.test` (committed — it holds no secrets) points `DATABASE_URL` at it, and `apps/api/src/lib/env.ts` loads that file ahead of `.env` whenever Vitest is running, so `npm test` picks it up with no extra flags. If the database name doesn't end in `_test`, the suite refuses to start rather than risk truncating a dev database. Migrations are applied automatically before the suite runs (`apps/api/vitest.global-setup.ts`) — there is no manual migrate step for tests.
+
+Seeding (`npm run db:seed --workspace apps/api`) is separate and targets the dev database from `.env`.
 
 ## Branching model — trunk-based
 

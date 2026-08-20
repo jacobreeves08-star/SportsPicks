@@ -3,9 +3,33 @@ import { dirname, join } from "node:path";
 import dotenv from "dotenv";
 import { z } from "zod";
 
+const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "../../../..");
+
+// Vitest sets VITEST=true in every worker (and NODE_ENV=test). Under a
+// test run .env.test is loaded FIRST and .env second — dotenv never
+// overwrites an already-set value, so .env.test wins for whatever it
+// defines and .env still fills in the rest. A normal run is unchanged.
+//
+// This split exists because the integration tests TRUNCATE every table
+// in DATABASE_URL. Without it, `npm test` on a dev machine wipes the dev
+// database — including the college quiz's player pool, which is exactly
+// how that pool has been lost before. CI is unaffected either way: it
+// exports DATABASE_URL in the job env, and that beats both files.
+const isTestRun = process.env.VITEST === "true" || process.env.NODE_ENV === "test";
+if (isTestRun) dotenv.config({ path: join(repoRoot, ".env.test") });
+
 // Always resolve .env from the repo root, regardless of the process's cwd
 // (npm workspace commands run with cwd = apps/api).
-dotenv.config({ path: join(dirname(fileURLToPath(import.meta.url)), "../../../../.env") });
+dotenv.config({ path: join(repoRoot, ".env") });
+
+/** The database name out of a Postgres URL: `postgres://…/foo` -> `foo`. */
+function databaseName(url: string): string {
+  try {
+    return new URL(url).pathname.replace(/^\//, "");
+  } catch {
+    return url;
+  }
+}
 
 // Treats an unset or blank env var as absent rather than a validation
 // failure — `KEY=` in a .env file parses as "", not undefined.
@@ -155,6 +179,21 @@ function loadEnv(): Env {
   }
   if (parsed.data.EMAIL_PROVIDER === "resend" && (!parsed.data.RESEND_API_KEY || !parsed.data.EMAIL_FROM_ADDRESS)) {
     throw new Error("RESEND_API_KEY and EMAIL_FROM_ADDRESS are required when EMAIL_PROVIDER=resend");
+  }
+  // The backstop for the .env.test split above. A missing or
+  // misconfigured .env.test falls through to .env's dev database in
+  // silence, and the first truncating test destroys it — so refuse to
+  // run at all rather than find out afterwards. Naming, not a URL
+  // comparison: CI, every dev machine and every throwaway database use
+  // different hosts, and "ends in _test" is the one thing they share.
+  if (isTestRun) {
+    const name = databaseName(parsed.data.DATABASE_URL);
+    if (!name.endsWith("_test")) {
+      throw new Error(
+        `Refusing to run tests against the "${name}" database: the suite truncates every table, so its name ` +
+          `must end in "_test". Point DATABASE_URL at a test database in .env.test — see CONTRIBUTING.md.`,
+      );
+    }
   }
   return parsed.data;
 }

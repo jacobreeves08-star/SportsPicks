@@ -33,7 +33,7 @@ npm run dev
 
 The API is now running at `http://localhost:3000` (health check at `/health`, pipeline status at `/health/data-freshness`). By default `SPORTS_API_PROVIDER=mock` and `EMAIL_PROVIDER=mock`, so local dev never calls the real ESPN API or sends real email — see [`.env.example`](.env.example). With `EMAIL_PROVIDER=mock`, verification/reset links are logged to the dev server's output instead of emailed — grab them from there while testing signup/password-reset locally.
 
-**Running the test suite requires local Postgres running** (`docker compose up -d` + `npm run db:migrate --workspace apps/api`, as above) — most tests are integration tests against a real database, not pure units.
+**Running the test suite requires local Postgres running** (`docker compose up -d`, as above) — most tests are integration tests against a real database, not pure units. They use their own `sports_pickem_test` database rather than the dev one, since they truncate every table; see [CONTRIBUTING.md](CONTRIBUTING.md#running-tests-locally) for the one-time setup.
 
 To run a scheduled job manually (same commands Render's Cron Jobs run on a schedule):
 
