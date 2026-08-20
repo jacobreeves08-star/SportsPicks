@@ -58,7 +58,15 @@ export type KnownApiErrorCode =
   | "NO_CHANGE"
   | "GOLF_PICK_LOCKED"
   | "GOLF_TOURNAMENT_CANCELED"
-  | "GOLF_TOURNAMENT_POSTPONED";
+  | "GOLF_TOURNAMENT_POSTPONED"
+  // Both mean "today's puzzle can't be built from the player pool yet"
+  // (503 — docs/college-trivia.md), and both should be handled
+  // identically by callers: TRIVIA_UNAVAILABLE is too few athletes,
+  // TRIVIA_POOL_TOO_SMALL is too few distinct colleges to fill five
+  // options. Which one it is tells an operator what to fix and tells a
+  // player nothing.
+  | "TRIVIA_UNAVAILABLE"
+  | "TRIVIA_POOL_TOO_SMALL";
 
 /**
  * Thrown by the API client for every non-2xx response and for network-

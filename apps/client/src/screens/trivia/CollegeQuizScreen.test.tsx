@@ -346,6 +346,20 @@ describe("CollegeQuizScreen — unhappy paths", () => {
     expect(screen.queryByRole("button", { name: /try again/i })).not.toBeInTheDocument();
   });
 
+  it("says the same thing when the pool has too few distinct colleges", async () => {
+    const { getDailyTrivia } = await import("../../api/endpoints.js");
+    vi.mocked(getDailyTrivia).mockRejectedValue(
+      new ApiError({ code: "TRIVIA_POOL_TOO_SMALL", message: "Not enough distinct colleges" }, 503),
+    );
+
+    await renderRouteAt("/college-quiz");
+
+    // Same screen as TRIVIA_UNAVAILABLE: the two 503s differ only in
+    // what an operator has to go fix.
+    expect(await screen.findByText(/no quiz today/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /try again/i })).not.toBeInTheDocument();
+  });
+
   it("offers a retry for an ordinary failure", async () => {
     const { getDailyTrivia } = await import("../../api/endpoints.js");
     vi.mocked(getDailyTrivia).mockRejectedValue(new ApiError({ code: "INTERNAL_ERROR", message: "boom" }, 500));

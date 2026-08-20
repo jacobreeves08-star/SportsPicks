@@ -1,7 +1,7 @@
 import { DateTime } from "luxon";
 import { sql } from "drizzle-orm";
 import { db, pool } from "./client.js";
-import { game, league, leagueMember, pick, result, tournament, tournamentEntry, user } from "./schema.js";
+import { game, league, leagueMember, nflAthlete, pick, result, tournament, tournamentEntry, user } from "./schema.js";
 import { logger } from "../lib/logger.js";
 import { hashPassword } from "../lib/password.js";
 
@@ -36,6 +36,11 @@ const FIGHT_IDS = [
 // an all-null fixture silently hides.
 const NFL_LOGO = (abbr: string) => `https://a.espncdn.com/i/teamlogos/nfl/500/${abbr}.png`;
 const COUNTRY_FLAG = (code: string) => `https://a.espncdn.com/i/teamlogos/countries/500/${code}.png`;
+// Both derived from the athlete's / college's ESPN id exactly the way
+// nfl-athlete-provider.ts builds them, so a seeded player carries the
+// same URLs a real ingest would write for him.
+const NFL_HEADSHOT = (athleteId: string) => `https://a.espncdn.com/i/headshots/nfl/players/full/${athleteId}.png`;
+const COLLEGE_LOGO = (collegeId: string) => `https://a.espncdn.com/i/teamlogos/ncaa/500/${collegeId}.png`;
 
 // Both seed users share this password so dev can actually log in as
 // them. Hashed at seed time with the real argon2 params rather than
@@ -255,9 +260,80 @@ async function main() {
       set: { flagUrl: sql`excluded.flag_url` },
     });
 
+  // The college quiz's player pool. Seeded here for the same reason the
+  // slate above is: with SPORTS_API_PROVIDER=mock — the dev/CI default —
+  // MockNflAthleteProvider returns zero athletes, so nfl-athlete-ingest
+  // cannot populate this table locally and getOrCreatePuzzle has nothing
+  // to build a puzzle from. Without these rows the quiz answers 503
+  // TRIVIA_UNAVAILABLE on every dev machine, forever.
+  //
+  // Real ESPN athlete ids, not `seed-` synthetic ones like the golfers
+  // above: nfl-athlete-ingest upserts on external_id, so an environment
+  // that later runs the live ingest REFRESHES these exact rows instead of
+  // inserting a second Patrick Mahomes beside them.
+  //
+  // Kamara and Njoku are deliberately not starters, so the tier fallback
+  // in lib/trivia-puzzle.ts (starters -> active skill positions -> anyone)
+  // has something to fall through to locally rather than only ever
+  // exercising its first tier.
+  const nflAthletes = [
+    { id: "3139477", name: "Patrick Mahomes", pos: "QB", jersey: "15", teamId: "12", team: "Kansas City Chiefs", college: "Texas Tech", collegeId: "2641", exp: 10, starter: true },
+    { id: "3918298", name: "Josh Allen", pos: "QB", jersey: "17", teamId: "2", team: "Buffalo Bills", college: "Wyoming", collegeId: "2751", exp: 9, starter: true },
+    { id: "3916387", name: "Lamar Jackson", pos: "QB", jersey: "8", teamId: "33", team: "Baltimore Ravens", college: "Louisville", collegeId: "97", exp: 9, starter: true },
+    { id: "3915511", name: "Joe Burrow", pos: "QB", jersey: "9", teamId: "4", team: "Cincinnati Bengals", college: "LSU", collegeId: "99", exp: 7, starter: true },
+    { id: "4040715", name: "Jalen Hurts", pos: "QB", jersey: "1", teamId: "21", team: "Philadelphia Eagles", college: "Oklahoma", collegeId: "201", exp: 7, starter: true },
+    { id: "2577417", name: "Dak Prescott", pos: "QB", jersey: "4", teamId: "6", team: "Dallas Cowboys", college: "Mississippi State", collegeId: "344", exp: 11, starter: true },
+    { id: "4038941", name: "Justin Herbert", pos: "QB", jersey: "10", teamId: "24", team: "Los Angeles Chargers", college: "Oregon", collegeId: "2483", exp: 7, starter: true },
+    { id: "4360310", name: "Trevor Lawrence", pos: "QB", jersey: "16", teamId: "30", team: "Jacksonville Jaguars", college: "Clemson", collegeId: "228", exp: 6, starter: true },
+    { id: "4432577", name: "C.J. Stroud", pos: "QB", jersey: "7", teamId: "34", team: "Houston Texans", college: "Ohio State", collegeId: "194", exp: 4, starter: true },
+    { id: "3046779", name: "Jared Goff", pos: "QB", jersey: "16", teamId: "8", team: "Detroit Lions", college: "California", collegeId: "25", exp: 11, starter: true },
+    { id: "3117251", name: "Christian McCaffrey", pos: "RB", jersey: "23", teamId: "25", team: "San Francisco 49ers", college: "Stanford", collegeId: "24", exp: 10, starter: true },
+    { id: "3929630", name: "Saquon Barkley", pos: "RB", jersey: "26", teamId: "21", team: "Philadelphia Eagles", college: "Penn State", collegeId: "213", exp: 9, starter: true },
+    { id: "3043078", name: "Derrick Henry", pos: "RB", jersey: "22", teamId: "33", team: "Baltimore Ravens", college: "Alabama", collegeId: "333", exp: 11, starter: true },
+    { id: "4430807", name: "Bijan Robinson", pos: "RB", jersey: "7", teamId: "1", team: "Atlanta Falcons", college: "Texas", collegeId: "251", exp: 4, starter: true },
+    { id: "4242335", name: "Jonathan Taylor", pos: "RB", jersey: "28", teamId: "11", team: "Indianapolis Colts", college: "Wisconsin", collegeId: "275", exp: 7, starter: true },
+    { id: "4427366", name: "Breece Hall", pos: "RB", jersey: "20", teamId: "20", team: "New York Jets", college: "Iowa State", collegeId: "66", exp: 5, starter: true },
+    { id: "3054850", name: "Alvin Kamara", pos: "RB", jersey: "41", teamId: "18", team: "New Orleans Saints", college: "Tennessee", collegeId: "2633", exp: 10, starter: false },
+    { id: "4262921", name: "Justin Jefferson", pos: "WR", jersey: "18", teamId: "16", team: "Minnesota Vikings", college: "LSU", collegeId: "99", exp: 7, starter: true },
+    { id: "4047646", name: "A.J. Brown", pos: "WR", jersey: "1", teamId: "17", team: "New England Patriots", college: "Ole Miss", collegeId: "145", exp: 8, starter: true },
+    { id: "4374302", name: "Amon-Ra St. Brown", pos: "WR", jersey: "14", teamId: "8", team: "Detroit Lions", college: "USC", collegeId: "30", exp: 6, starter: true },
+    { id: "4426515", name: "Puka Nacua", pos: "WR", jersey: "12", teamId: "14", team: "Los Angeles Rams", college: "BYU", collegeId: "252", exp: 4, starter: true },
+    { id: "4258173", name: "Nico Collins", pos: "WR", jersey: "12", teamId: "34", team: "Houston Texans", college: "Michigan", collegeId: "130", exp: 6, starter: true },
+    { id: "3915416", name: "DJ Moore", pos: "WR", jersey: "2", teamId: "2", team: "Buffalo Bills", college: "Maryland", collegeId: "120", exp: 9, starter: true },
+    { id: "15847", name: "Travis Kelce", pos: "TE", jersey: "87", teamId: "12", team: "Kansas City Chiefs", college: "Cincinnati", collegeId: "2132", exp: 14, starter: true },
+    { id: "3040151", name: "George Kittle", pos: "TE", jersey: "85", teamId: "25", team: "San Francisco 49ers", college: "Iowa", collegeId: "2294", exp: 10, starter: true },
+    { id: "4361307", name: "Trey McBride", pos: "TE", jersey: "85", teamId: "22", team: "Arizona Cardinals", college: "Colorado State", collegeId: "36", exp: 5, starter: true },
+    { id: "4432665", name: "Brock Bowers", pos: "TE", jersey: "89", teamId: "13", team: "Las Vegas Raiders", college: "Georgia", collegeId: "61", exp: 3, starter: true },
+    { id: "3123076", name: "David Njoku", pos: "TE", jersey: "83", teamId: "24", team: "Los Angeles Chargers", college: "Miami", collegeId: "2390", exp: 12, starter: false },
+  ];
+
+  await db
+    .insert(nflAthlete)
+    .values(
+      nflAthletes.map((a) => ({
+        externalId: a.id,
+        displayName: a.name,
+        positionAbbreviation: a.pos,
+        jersey: a.jersey,
+        headshotUrl: NFL_HEADSHOT(a.id),
+        teamExternalId: a.teamId,
+        teamDisplayName: a.team,
+        collegeName: a.college,
+        collegeExternalId: a.collegeId,
+        collegeLogoUrl: COLLEGE_LOGO(a.collegeId),
+        rosterStatus: "active" as const,
+        experienceYears: a.exp,
+        isStarter: a.starter,
+      })),
+    )
+    // doNothing, not doUpdate: a real ingest may already have written
+    // fresher roster/starter data for these same ids, and re-running the
+    // seed must not drag it back to this fixture's snapshot.
+    .onConflictDoNothing({ target: nflAthlete.externalId });
+
   logger.info(
     { login: `alice@example.com / bob@example.com, password: ${SEED_PASSWORD}` },
-    "seed complete: 2 users, 1 league, 3 graded NFL games, 2 open MMA fights, 6 picks",
+    `seed complete: 2 users, 1 league, 3 graded NFL games, 2 open MMA fights, 6 picks, ${nflAthletes.length} NFL athletes`,
   );
 }
 

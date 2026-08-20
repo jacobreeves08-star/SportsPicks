@@ -48,16 +48,23 @@ export function CollegeQuizPage() {
   );
 }
 
+/**
+ * The server codes that mean "there is no puzzle today", as opposed to
+ * "loading it failed" — see api/errors.ts. Both are 503s the pool
+ * simply isn't ready for; neither is something a retry can fix.
+ */
+const QUIZ_NOT_READY_CODES: ReadonlySet<string> = new Set(["TRIVIA_UNAVAILABLE", "TRIVIA_POOL_TOO_SMALL"]);
+
 export function CollegeQuizScreen() {
   const { data, isLoading, isError, error, refetch } = useDailyTrivia();
 
   if (isLoading) return <LoadingState rows={4} label="Loading today's quiz" />;
 
   if (isError) {
-    // A 503 here is "the player pool hasn't been ingested yet" —
+    // A 503 here is "the player pool can't produce a puzzle yet" —
     // nothing is broken and retrying won't help, so say that instead
     // of showing a generic failure with a Retry button that can't work.
-    if (error instanceof ApiError && error.code === "TRIVIA_UNAVAILABLE") {
+    if (error instanceof ApiError && QUIZ_NOT_READY_CODES.has(error.code)) {
       return (
         <Surface variant="raised" radius="lg" padding={5}>
           <Stack gap={2} align="center">

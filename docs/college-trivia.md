@@ -123,7 +123,7 @@ It runs **weekly**, not every few minutes: a player's college never changes at a
 npm run nfl-athlete-ingest --workspace apps/api
 ```
 
-With `SPORTS_API_PROVIDER=mock` (the local default) the provider returns nothing, so a fresh dev database has an empty pool and the quiz correctly reports `TRIVIA_UNAVAILABLE` until a live ingest is run.
+With `SPORTS_API_PROVIDER=mock` (the local default) the provider returns nothing, so this job cannot populate the pool locally at all. The dev seed ([`apps/api/src/db/seed.ts`](../apps/api/src/db/seed.ts)) therefore ships a 28-player pool of its own — real ESPN athlete ids, so a later live ingest refreshes those exact rows instead of duplicating them — and `npm run db:seed --workspace apps/api` is all a dev machine needs for a playable quiz. A database with neither the seed nor an ingest has an empty pool and the quiz correctly reports `TRIVIA_UNAVAILABLE`.
 
 ## Routing: `/` became public
 
@@ -144,4 +144,9 @@ Before this feature, `/` was auth-guarded and its only behavior for a stranger w
 | `POST /trivia/daily/answers` | Optional | `{ questionId, selectedIndex }`. Grades and reveals the right answer. Idempotent for a logged-in caller — a repeat returns the stored answer, never a re-grade. |
 | `GET /trivia/me/stats` | Required | The caller's own metrics. |
 
-`TRIVIA_UNAVAILABLE` (503) means the player pool hasn't been ingested yet. It's a 503 with its own code rather than a 500 because nothing is broken — the data just isn't there — and the client shows "check back soon" instead of an error state with a Retry button that couldn't work.
+Two 503s mean "today's puzzle can't be built from the pool yet", and the client renders both identically — "check back soon", with no Retry button, since retrying can't fix either:
+
+- `TRIVIA_UNAVAILABLE` — fewer than five athletes in the pool (typically: it has never been ingested or seeded).
+- `TRIVIA_POOL_TOO_SMALL` — enough athletes, but fewer than five distinct colleges between them, so a question can't be given four plausible wrong options.
+
+Both are 503s with their own codes rather than 500s because nothing is broken — the data just isn't there yet. The distinction tells an operator which thing to go fix and tells a player nothing, which is why the client treats them as one case (`QUIZ_NOT_READY_CODES` in [`CollegeQuizScreen.tsx`](../apps/client/src/screens/trivia/CollegeQuizScreen.tsx)).

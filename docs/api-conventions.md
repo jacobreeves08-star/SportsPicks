@@ -60,6 +60,8 @@ Codes in use today:
 | `GAME_NOT_FOUND` | 404 | `correct-result`'s `:gameId` doesn't exist, or its sport isn't part of the requesting league (JAC-37-42) |
 | `RESULT_NOT_FOUND` | 404 | `correct-result` targets a game with no `result` yet — corrects an existing result, doesn't grade a new one |
 | `NO_CHANGE` | 400 | `correct-result`'s `winningTeam` matches the current result — a no-op correction is rejected rather than recorded |
+| `TRIVIA_UNAVAILABLE` | 503 | Fewer than five athletes in the NFL player pool, so today’s quiz cannot be built (docs/college-trivia.md). Not a 500 — nothing is broken, the data just isn’t there yet |
+| `TRIVIA_POOL_TOO_SMALL` | 503 | Enough athletes, but fewer than five distinct colleges between them, so a question cannot be given four plausible wrong options. Same meaning to a player as `TRIVIA_UNAVAILABLE`; clients should handle the two identically |
 
 Offensive league-name rejection reuses `VALIDATION_ERROR` (`fields: [{ field: "name", ... }]`) rather than a bespoke code — same pattern as timezone validation in `users.routes.ts`/`auth.routes.ts`. A pick write against a nonexistent game, or a game whose sport isn't part of the league, also reuses `VALIDATION_ERROR` for the same reason — a malformed/invalid reference, not a distinct business rule the client needs to branch on differently. `PICK_LOCKED`/`GAME_CANCELED`/`GAME_POSTPONED`/`INVALID_TEAM_SELECTION` each get their own code because they *are* — see `apps/api/src/lib/pick-write.ts`'s `rejectionToApiError`. `correct-result`'s `winningTeam` failing the same "must be one of the game's two teams (or `'DRAW'`)" check also reuses `VALIDATION_ERROR`, for the identical reason.
 
